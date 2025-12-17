@@ -8,6 +8,7 @@ function Game () {
     const [currentCard, setCurrentCard] = useState(null);
     const [pendingCard, setPendingCard] = useState(null);
     const [hand, setHand] = useState([]);
+    const [swappingWithDiscard, setSwappingWithDiscard] = useState(false);
 
     // Deal 4 cards at the start of the game and put one card in discard pile
     useEffect(() => {
@@ -73,9 +74,34 @@ function Game () {
         setHand((prev) => prev.filter((_, i) => i !== index));
         setDiscardPile((prev) => [...prev, handCard]);
       } else {
-        // ranks don't match
+        // ranks don't match, add 2 cards from deck to hand as penalty
         alert("does not match");
+        const newDeck = [...deck];
+        const cardsToAdd = [];
+        for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+          cardsToAdd.push(newDeck.pop());
+        }
+        setDeck(newDeck);
+        setHand((prev) => [...prev, ...cardsToAdd]);
       }
+    };
+
+    const handleSwapWithDiscard = (index) => {
+      const lastDiscardedCard = discardPile[discardPile.length - 1];
+      const handCard = hand[index];
+
+      // Swap: hand card goes to discard, discard card goes to hand
+      const newHand = [...hand];
+      newHand[index] = lastDiscardedCard;
+      setHand(newHand);
+
+      setDiscardPile((prev) => {
+        const newPile = [...prev];
+        newPile[newPile.length - 1] = handCard;
+        return newPile;
+      });
+
+      setSwappingWithDiscard(false);
     };
 
     const handleResetDeck = () => {
@@ -167,7 +193,7 @@ function Game () {
                 <div style={styles.handContainer}>
                   {hand.length > 0 ? (
                     <>
-                        <div style={styles.miniHand}>
+                        <div style={hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
                           {hand.map((card, idx) => (
                             <div key={card.id} style={styles.miniCardWrapper}>
                               <div style={styles.miniCard}>
@@ -187,6 +213,11 @@ function Game () {
                               {pendingCard ? (
                                 <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
                                   Swap
+                                </button>
+                              ) : null}
+                              {swappingWithDiscard ? (
+                                <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
+                                  Swap with Discard
                                 </button>
                               ) : null}
                             </div>
@@ -219,6 +250,16 @@ function Game () {
                     <div style={styles.discardMiniPlaceholder}>Empty</div>
                     )}
                 </div>
+
+                {discardPile.length > 0 ? (
+                  <button 
+                    style={styles.swapDiscardButton} 
+                    onClick={() => setSwappingWithDiscard(!swappingWithDiscard)}
+                    title="Swap a hand card with the top discard card"
+                  >
+                    {swappingWithDiscard ? "Cancel" : "Swap with Discard"}
+                  </button>
+                ) : null}
 
                 <div style={styles.pileLabel}>
                     <div style={styles.pileName}>Discard</div>
@@ -409,10 +450,18 @@ const styles = {
     marginTop: 8,
   },
 
-  miniHand: {
+  miniHandFlex: {
     display: "flex",
     gap: 10,
     alignItems: "center",
+    justifyContent: "center",
+  },
+
+  miniHand: { 
+    display: "grid", 
+    gridTemplateColumns: "repeat(4, 90px)", 
+    gap: 10, 
+    justifyContent: "center", 
   },
   
   miniCard: {
@@ -464,6 +513,17 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.12)",
     background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
     boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+    color: "white",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+
+  swapDiscardButton: {
+    padding: "8px 12px",
+    fontSize: 12,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.06)",
     color: "white",
     cursor: "pointer",
     fontWeight: 700,
