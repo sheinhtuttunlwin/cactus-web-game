@@ -179,8 +179,8 @@ function Game () {
                     <button
                     style={styles.button}
                     onClick={handleDraw}
-                    disabled={deck.length === 0 || !!pendingCard}
-                    title={deck.length === 0 ? "Deck is empty" : pendingCard ? "Resolve drawn card first" : "Draw a card"}
+                    disabled={deck.length === 0 || !!pendingCard || swappingWithDiscard}
+                    title={swappingWithDiscard ? "Cancel swap with discard first" : deck.length === 0 ? "Deck is empty" : pendingCard ? "Resolve drawn card first" : "Draw a card"}
                     >
                     Draw
                     </button>
@@ -204,10 +204,10 @@ function Game () {
                             <div key={card.id} style={styles.miniCardWrapper}>
                               <div style={styles.miniCard}>
                                 <button 
-                                  style={{...styles.stackButton, opacity: pendingCard ? 0.5 : 1}}
+                                  style={{...styles.stackButton, opacity: pendingCard || swappingWithDiscard ? 0.5 : 1}}
                                   onClick={() => handleStack(idx)} 
-                                  title={pendingCard ? "Resolve drawn card first" : "Stack this card"}
-                                  disabled={!!pendingCard}
+                                  title={swappingWithDiscard ? "Cancel swap with discard first" : pendingCard ? "Resolve drawn card first" : "Stack this card"}
+                                  disabled={!!pendingCard || swappingWithDiscard}
                                 >
                                   Stack
                                 </button>
