@@ -11,22 +11,21 @@ function Game () {
 
     // Deal 4 cards at the start of the game and put one card in discard pile
     useEffect(() => {
-      setDeck((prevDeck) => {
-        const newDeck = [...prevDeck];
-        // Pop one card to the discard pile
-        if (newDeck.length > 0) {
-          const firstDiscardCard = newDeck.pop();
-          setDiscardPile([firstDiscardCard]);
-        }
-        // Deal 4 cards to hand
-        const initialHand = [];
-        for (let i = 0; i < 4 && newDeck.length > 0; i++) {
-          initialHand.push(newDeck.pop());
-        }
-        setHand(initialHand);
-        return newDeck;
-      });
+      const fresh = createShuffledDeck();
+
+      const firstDiscardCard = fresh.pop();
+      const initialHand = [];
+      for (let i = 0; i < 4 && fresh.length > 0; i++) {
+        initialHand.push(fresh.pop());
+      }
+
+      setDeck(fresh);
+      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
+      setHand(initialHand);
+      setCurrentCard(null);
+      setPendingCard(null);
     }, []);
+
 
     const handleDraw = () => {
       if (deck.length === 0 || pendingCard) return;
@@ -48,18 +47,17 @@ function Game () {
 
     const handleSwapWith = (index) => {
       if (!pendingCard) return;
-      setHand((prev) => {
-        const newHand = [...prev];
-        const replaced = newHand[index];
-        newHand[index] = pendingCard;
-        // put replaced card into discard
-        setDiscardPile((prevDiscard) => [...prevDiscard, replaced]);
-        return newHand;
-      });
-      // do not show the swapped-in card as the current card
-      setCurrentCard(null);
+
+      const replaced = hand[index];
+      const newHand = [...hand];
+      newHand[index] = pendingCard;
+
+      setHand(newHand);
+      setDiscardPile((prev) => [...prev, replaced]);
       setPendingCard(null);
+      setCurrentCard(null);
     };
+
 
     const handleStack = (index) => {
       const lastDiscardedCard = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
@@ -82,17 +80,20 @@ function Game () {
 
     const handleResetDeck = () => {
       const fresh = createShuffledDeck();
-      // Pop one card to the discard pile
+
       const firstDiscardCard = fresh.pop();
       const initialHand = [];
       for (let i = 0; i < 4 && fresh.length > 0; i++) {
         initialHand.push(fresh.pop());
       }
+
       setDeck(fresh);
       setHand(initialHand);
-      setDiscardPile([firstDiscardCard]);
+      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
       setCurrentCard(null);
+      setPendingCard(null);
     };
+
 
     return (
         <div style={styles.page}>
