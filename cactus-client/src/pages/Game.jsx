@@ -183,6 +183,7 @@ function Game () {
         2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
       });
       setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
+      setHasStackedThisRound(false);
       setCurrentPlayer(1);
     };
 
@@ -193,8 +194,9 @@ function Game () {
     });
 
     const switchTurn = () => {
-      setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
+      setCurrentPlayer((p) => (p === 1 ? 2 : 1));
     };
+
 
     return (
         <div style={styles.page}>
@@ -635,6 +637,7 @@ const styles = {
     fontWeight: 800,
     letterSpacing: 0.8,
     color: "#2E2E2E",
+    filter: "blur(3px)",
   },
   miniCardWrapper: {
     display: "flex",
