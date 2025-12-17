@@ -55,6 +55,25 @@ function Game () {
       setPendingCard(null);
     };
 
+    const handleStack = (index) => {
+      const lastDiscardedCard = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
+      const handCard = hand[index];
+      
+      if (!lastDiscardedCard) {
+        alert("No card to stack on (discard pile is empty)");
+        return;
+      }
+      
+      if (handCard.rank === lastDiscardedCard.rank) {
+        // ranks match, discard the hand card
+        setHand((prev) => prev.filter((_, i) => i !== index));
+        setDiscardPile((prev) => [...prev, handCard]);
+      } else {
+        // ranks don't match
+        alert("does not match");
+      }
+    };
+
     const handleResetDeck = () => {
       const fresh = createShuffledDeck();
       const initialHand = [];
@@ -143,6 +162,9 @@ function Game () {
                           {hand.map((card, idx) => (
                             <div key={card.id} style={styles.miniCardWrapper}>
                               <div style={styles.miniCard}>
+                                <button style={styles.stackButton} onClick={() => handleStack(idx)} title="Stack this card">
+                                  Stack
+                                </button>
                                 <div
                                   style={{
                                     ...styles.miniCardText,
@@ -391,9 +413,11 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.12)",
     background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+    position: "relative",
   },
 
   miniCardText: {
@@ -407,6 +431,21 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
+  },
+
+  stackButton: {
+    position: "absolute",
+    top: 4,
+    left: "50%",
+    transform: "translateX(-50%)",
+    padding: "4px 8px",
+    fontSize: 10,
+    borderRadius: 6,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(0,0,0,0.3)",
+    color: "white",
+    cursor: "pointer",
+    fontWeight: 700,
   },
 
   swapSmall: {
