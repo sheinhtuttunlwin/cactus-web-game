@@ -68,6 +68,12 @@ function Game () {
         alert("No card to stack on (discard pile is empty)");
         return;
       }
+
+      // Guard: must always have at least 1 card in hand
+      if (hand.length === 1) {
+        alert("You must keep at least 1 card in your hand");
+        return;
+      }
       
       if (handCard.rank === lastDiscardedCard.rank) {
         // ranks match, discard the hand card
