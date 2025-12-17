@@ -25,8 +25,13 @@ function Game () {
       setHand(initialHand);
       setCurrentCard(null);
       setPendingCard(null);
+      setSwappingWithDiscard(false);
     }, []);
 
+    // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
+    useEffect(() => {
+      if (pendingCard) setSwappingWithDiscard(false);
+    }, [pendingCard]);
 
     const handleDraw = () => {
       if (deck.length === 0 || pendingCard) return;
