@@ -203,7 +203,12 @@ function Game () {
                           {hand.map((card, idx) => (
                             <div key={card.id} style={styles.miniCardWrapper}>
                               <div style={styles.miniCard}>
-                                <button style={styles.stackButton} onClick={() => handleStack(idx)} title="Stack this card">
+                                <button 
+                                  style={{...styles.stackButton, opacity: pendingCard ? 0.5 : 1}}
+                                  onClick={() => handleStack(idx)} 
+                                  title={pendingCard ? "Resolve drawn card first" : "Stack this card"}
+                                  disabled={!!pendingCard}
+                                >
                                   Stack
                                 </button>
                                 <div
@@ -259,9 +264,10 @@ function Game () {
 
                 {discardPile.length > 0 ? (
                   <button 
-                    style={styles.swapDiscardButton} 
+                    style={{...styles.swapDiscardButton, opacity: pendingCard ? 0.5 : 1}}
                     onClick={() => setSwappingWithDiscard(!swappingWithDiscard)}
-                    title="Swap a hand card with the top discard card"
+                    title={pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
+                    disabled={!!pendingCard}
                   >
                     {swappingWithDiscard ? "Cancel" : "Swap with Discard"}
                   </button>
