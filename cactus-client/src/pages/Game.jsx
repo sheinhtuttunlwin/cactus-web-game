@@ -64,6 +64,7 @@ function Game () {
         ...prev,
         [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
       }));
+      setTimeout(switchTurn, 0);
     };
 
     const handleSwapWith = (index) => {
@@ -80,6 +81,7 @@ function Game () {
         };
       });
       setDiscardPile((prev) => [...prev, replaced]);
+      setTimeout(switchTurn, 0);
     };
 
 
@@ -146,6 +148,7 @@ function Game () {
         newPile[newPile.length - 1] = handCard;
         return newPile;
       });
+      setTimeout(switchTurn, 0);
     };
 
     const handleResetDeck = () => {
@@ -401,12 +404,6 @@ function Game () {
               </div>
             </div>
 
-            {/* End Turn button */}
-            <div style={styles.endTurnContainer}>
-              <button style={styles.endTurnButton} onClick={switchTurn}>
-                End Turn → Player {currentPlayer === 1 ? 2 : 1}
-              </button>
-            </div>
             </div>
         </div>
         );
@@ -682,39 +679,6 @@ const styles = {
     gap: 24,
     padding: "20px 0",
     borderTop: "1px solid rgba(255,255,255,0.1)",
-  },
-
-  playerColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    alignItems: "center",
-  },
-
-  playerLabel: {
-    fontSize: 16,
-    fontWeight: 700,
-    letterSpacing: 0.2,
-    opacity: 0.9,
-  },
-
-  endTurnContainer: {
-    display: "flex",
-    justifyContent: "center",
-    padding: "16px 0",
-    borderTop: "1px solid rgba(255,255,255,0.1)",
-  },
-
-  endTurnButton: {
-    padding: "12px 24px",
-    fontSize: 14,
-    fontWeight: 700,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.18)",
-    background: "linear-gradient(180deg, rgba(34, 197, 94, 0.25), rgba(34, 197, 94, 0.15))",
-    color: "white",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
   },
 };
 
