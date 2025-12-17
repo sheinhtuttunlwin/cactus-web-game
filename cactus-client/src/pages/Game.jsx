@@ -5,69 +5,87 @@ function Game () {
 
     const [deck, setDeck] = useState(() => createShuffledDeck());
     const [discardPile, setDiscardPile] = useState([]);
-    const [currentCard, setCurrentCard] = useState(null);
-    const [pendingCard, setPendingCard] = useState(null);
-    const [hand, setHand] = useState([]);
-    const [swappingWithDiscard, setSwappingWithDiscard] = useState(false);
+    const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
+    const [players, setPlayers] = useState({
+      1: { hand: [], pendingCard: null, swappingWithDiscard: false },
+      2: { hand: [], pendingCard: null, swappingWithDiscard: false },
+    });
 
-    // Deal 4 cards at the start of the game and put one card in discard pile
+    // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
       const fresh = createShuffledDeck();
 
       const firstDiscardCard = fresh.pop();
-      const initialHand = [];
+      const player1Hand = [];
+      const player2Hand = [];
+
       for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        initialHand.push(fresh.pop());
+        player1Hand.push(fresh.pop());
+      }
+      for (let i = 0; i < 4 && fresh.length > 0; i++) {
+        player2Hand.push(fresh.pop());
       }
 
       setDeck(fresh);
       setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setHand(initialHand);
-      setCurrentCard(null);
-      setPendingCard(null);
-      setSwappingWithDiscard(false);
+      setPlayers({
+        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
+        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
+      });
+      setCurrentPlayer(1);
     }, []);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
     useEffect(() => {
-      if (pendingCard) setSwappingWithDiscard(false);
-    }, [pendingCard]);
+      if (players[currentPlayer].pendingCard) {
+        setPlayers((prev) => ({
+          ...prev,
+          [currentPlayer]: { ...prev[currentPlayer], swappingWithDiscard: false },
+        }));
+      }
+    }, [players[currentPlayer].pendingCard, currentPlayer]);
 
     const handleDraw = () => {
-      if (deck.length === 0 || pendingCard) return;
+      if (deck.length === 0 || players[currentPlayer].pendingCard) return;
       const newDeck = [...deck];
       const drawnCard = newDeck.pop();
       setDeck(newDeck);
-      setPendingCard(drawnCard);
-      // clear the current card display when drawing
-      setCurrentCard(null);
+      setPlayers((prev) => ({
+        ...prev,
+        [currentPlayer]: { ...prev[currentPlayer], pendingCard: drawnCard },
+      }));
     };
 
     const handleDiscardPending = () => {
+      const pendingCard = players[currentPlayer].pendingCard;
       if (!pendingCard) return;
       setDiscardPile((prev) => [...prev, pendingCard]);
-      // do not show the discarded card as the current card
-      setCurrentCard(null);
-      setPendingCard(null);
+      setPlayers((prev) => ({
+        ...prev,
+        [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
+      }));
     };
 
     const handleSwapWith = (index) => {
+      const pendingCard = players[currentPlayer].pendingCard;
       if (!pendingCard) return;
 
-      const replaced = hand[index];
-      const newHand = [...hand];
-      newHand[index] = pendingCard;
-
-      setHand(newHand);
+      const replaced = players[currentPlayer].hand[index];
+      setPlayers((prev) => {
+        const newHand = [...prev[currentPlayer].hand];
+        newHand[index] = pendingCard;
+        return {
+          ...prev,
+          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, pendingCard: null },
+        };
+      });
       setDiscardPile((prev) => [...prev, replaced]);
-      setPendingCard(null);
-      setCurrentCard(null);
     };
 
 
     const handleStack = (index) => {
       const lastDiscardedCard = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
-      const handCard = hand[index];
+      const handCard = players[currentPlayer].hand[index];
       
       if (!lastDiscardedCard) {
         alert("No card to stack on (discard pile is empty)");
@@ -75,14 +93,20 @@ function Game () {
       }
 
       // Guard: must always have at least 1 card in hand
-      if (hand.length === 1) {
+      if (players[currentPlayer].hand.length === 1) {
         alert("You must keep at least 1 card in your hand");
         return;
       }
       
       if (handCard.rank === lastDiscardedCard.rank) {
         // ranks match, discard the hand card
-        setHand((prev) => prev.filter((_, i) => i !== index));
+        setPlayers((prev) => ({
+          ...prev,
+          [currentPlayer]: {
+            ...prev[currentPlayer],
+            hand: prev[currentPlayer].hand.filter((_, i) => i !== index),
+          },
+        }));
         setDiscardPile((prev) => [...prev, handCard]);
       } else {
         // ranks don't match, add 2 cards from deck to hand as penalty
@@ -93,43 +117,58 @@ function Game () {
           cardsToAdd.push(newDeck.pop());
         }
         setDeck(newDeck);
-        setHand((prev) => [...prev, ...cardsToAdd]);
+        setPlayers((prev) => ({
+          ...prev,
+          [currentPlayer]: {
+            ...prev[currentPlayer],
+            hand: [...prev[currentPlayer].hand, ...cardsToAdd],
+          },
+        }));
       }
     };
 
     const handleSwapWithDiscard = (index) => {
       const lastDiscardedCard = discardPile[discardPile.length - 1];
-      const handCard = hand[index];
+      const handCard = players[currentPlayer].hand[index];
 
       // Swap: hand card goes to discard, discard card goes to hand
-      const newHand = [...hand];
-      newHand[index] = lastDiscardedCard;
-      setHand(newHand);
+      setPlayers((prev) => {
+        const newHand = [...prev[currentPlayer].hand];
+        newHand[index] = lastDiscardedCard;
+        return {
+          ...prev,
+          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, swappingWithDiscard: false },
+        };
+      });
 
       setDiscardPile((prev) => {
         const newPile = [...prev];
         newPile[newPile.length - 1] = handCard;
         return newPile;
       });
-
-      setSwappingWithDiscard(false);
     };
 
     const handleResetDeck = () => {
       const fresh = createShuffledDeck();
 
       const firstDiscardCard = fresh.pop();
-      const initialHand = [];
+      const player1Hand = [];
+      const player2Hand = [];
+
       for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        initialHand.push(fresh.pop());
+        player1Hand.push(fresh.pop());
+      }
+      for (let i = 0; i < 4 && fresh.length > 0; i++) {
+        player2Hand.push(fresh.pop());
       }
 
       setDeck(fresh);
-      setHand(initialHand);
+      setPlayers({
+        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
+        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
+      });
       setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setCurrentCard(null);
-      setPendingCard(null);
-      setSwappingWithDiscard(false);
+      setCurrentPlayer(1);
     };
 
     const actionButtonStyle = (baseStyle, disabled) => ({
@@ -138,12 +177,17 @@ function Game () {
       cursor: disabled ? "not-allowed" : "pointer",
     });
 
+    const switchTurn = () => {
+      setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
+    };
+
     return (
         <div style={styles.page}>
             <div style={styles.table}>
             <header style={styles.header}>
                 <h1 style={styles.title}>Card Test</h1>
-                <p style={styles.subtitle}>Deck + discard + current card</p>
+                <p style={styles.subtitle}>2-Player Turn-Based Game</p>
+                <p style={styles.turnIndicator}>Player {currentPlayer}'s Turn</p>
             </header>
 
             <div style={styles.centerArea}>
@@ -161,25 +205,15 @@ function Game () {
                 <div style={styles.currentLabel}>Current Card</div>
 
                 <div style={styles.cardFace}>
-                  {pendingCard ? (
+                  {players[currentPlayer].pendingCard ? (
                   <div
                     style={{
                     ...styles.cardText,
-                    color: pendingCard.color === "red" ? "crimson" : "white",
+                    color: players[currentPlayer].pendingCard.color === "red" ? "crimson" : "white",
                     }}
                   >
-                    {pendingCard.rank}
-                    {pendingCard.suit}
-                  </div>
-                  ) : currentCard ? (
-                  <div
-                    style={{
-                    ...styles.cardText,
-                    color: currentCard.color === "red" ? "crimson" : "white",
-                    }}
-                  >
-                    {currentCard.rank}
-                    {currentCard.suit}
+                    {players[currentPlayer].pendingCard.rank}
+                    {players[currentPlayer].pendingCard.suit}
                   </div>
                   ) : (
                   <div style={styles.cardPlaceholder}>Draw to reveal</div>
@@ -188,15 +222,15 @@ function Game () {
 
                 <div style={styles.controls}>
                     <button
-                      style={actionButtonStyle(styles.button, deck.length === 0 || !!pendingCard || swappingWithDiscard)}
+                      style={actionButtonStyle(styles.button, deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard)}
                       onClick={handleDraw}
-                      disabled={deck.length === 0 || !!pendingCard || swappingWithDiscard}
+                      disabled={deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard}
                       title={
-                        swappingWithDiscard
+                        players[currentPlayer].swappingWithDiscard
                           ? "Cancel swap with discard first"
                           : deck.length === 0
                           ? "Deck is empty"
-                          : pendingCard
+                          : players[currentPlayer].pendingCard
                           ? "Resolve drawn card first"
                           : "Draw a card"
                       }
@@ -208,62 +242,11 @@ function Game () {
                     Reset
                     </button>
 
-                    {pendingCard ? (
+                    {players[currentPlayer].pendingCard ? (
                       <button style={styles.button} onClick={handleDiscardPending} title="Discard drawn card">
                         Discard
                       </button>
                     ) : null}
-                </div>
-                {/* Player hand */}
-                <div style={styles.handContainer}>
-                  {hand.length > 0 ? (
-                    <>
-                        <div style={hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
-                          {hand.map((card, idx) => (
-                            <div key={card.id} style={styles.miniCardWrapper}>
-                              <div style={styles.miniCard}>
-                                <button
-                                  style={actionButtonStyle(styles.stackButton, !!pendingCard || swappingWithDiscard)}
-                                  onClick={() => handleStack(idx)}
-                                  disabled={!!pendingCard || swappingWithDiscard}
-                                  title={
-                                    swappingWithDiscard
-                                      ? "Cancel swap with discard first"
-                                      : pendingCard
-                                      ? "Resolve drawn card first"
-                                      : "Stack this card"
-                                  }
-                                >
-                                  Stack
-                                </button>
-
-                                <div
-                                  style={{
-                                    ...styles.miniCardText,
-                                    color: card.color === "red" ? "crimson" : "white",
-                                  }}
-                                >
-                                  {card.rank}
-                                  {card.suit}
-                                </div>
-                              </div>
-                              {pendingCard ? (
-                                <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
-                                  Swap
-                                </button>
-                              ) : null}
-                              {swappingWithDiscard ? (
-                                <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
-                                  Swap with Discard
-                                </button>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                    </>
-                  ) : (
-                    <div style={styles.cardPlaceholder}>No cards in hand</div>
-                  )}
                 </div>
                 </div>
 
@@ -290,12 +273,15 @@ function Game () {
 
                 {discardPile.length > 0 ? (
                   <button
-                    style={actionButtonStyle(styles.swapDiscardButton, !!pendingCard)}
-                    onClick={() => setSwappingWithDiscard(!swappingWithDiscard)}
-                    disabled={!!pendingCard}
-                    title={pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
+                    style={actionButtonStyle(styles.swapDiscardButton, !!players[currentPlayer].pendingCard)}
+                    onClick={() => setPlayers((prev) => ({
+                      ...prev,
+                      [currentPlayer]: { ...prev[currentPlayer], swappingWithDiscard: !prev[currentPlayer].swappingWithDiscard }
+                    }))}
+                    disabled={!!players[currentPlayer].pendingCard}
+                    title={players[currentPlayer].pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
                   >
-                    {swappingWithDiscard ? "Cancel" : "Swap with Discard"}
+                    {players[currentPlayer].swappingWithDiscard ? "Cancel" : "Swap with Discard"}
                   </button>
 
                 ) : null}
@@ -304,6 +290,122 @@ function Game () {
                     <div style={styles.pileCount}>{discardPile.length} cards</div>
                 </div>
                 </div>
+            </div>
+
+            {/* Player hands section */}
+            <div style={styles.playersSection}>
+              <div style={styles.playerColumn}>
+                <div style={styles.playerLabel}>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</div>
+                <div style={styles.handContainer}>
+                  {players[1].hand.length > 0 ? (
+                    <div style={players[1].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
+                      {players[1].hand.map((card, idx) => (
+                        <div key={card.id} style={styles.miniCardWrapper}>
+                          <div style={styles.miniCard}>
+                            {currentPlayer === 1 && (
+                              <button
+                                style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
+                                onClick={() => handleStack(idx)}
+                                disabled={!!players[1].pendingCard || players[1].swappingWithDiscard}
+                                title={
+                                  players[1].swappingWithDiscard
+                                    ? "Cancel swap with discard first"
+                                    : players[1].pendingCard
+                                    ? "Resolve drawn card first"
+                                    : "Stack this card"
+                                }
+                              >
+                                Stack
+                              </button>
+                            )}
+                            <div
+                              style={{
+                                ...styles.miniCardText,
+                                color: card.color === "red" ? "crimson" : "white",
+                              }}
+                            >
+                              {card.rank}
+                              {card.suit}
+                            </div>
+                          </div>
+                          {currentPlayer === 1 && players[1].pendingCard ? (
+                            <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
+                              Swap
+                            </button>
+                          ) : null}
+                          {currentPlayer === 1 && players[1].swappingWithDiscard ? (
+                            <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
+                              Swap with Discard
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={styles.cardPlaceholder}>No cards in hand</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={styles.playerColumn}>
+                <div style={styles.playerLabel}>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</div>
+                <div style={styles.handContainer}>
+                  {players[2].hand.length > 0 ? (
+                    <div style={players[2].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
+                      {players[2].hand.map((card, idx) => (
+                        <div key={card.id} style={styles.miniCardWrapper}>
+                          <div style={styles.miniCard}>
+                            {currentPlayer === 2 && (
+                              <button
+                                style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
+                                onClick={() => handleStack(idx)}
+                                disabled={!!players[2].pendingCard || players[2].swappingWithDiscard}
+                                title={
+                                  players[2].swappingWithDiscard
+                                    ? "Cancel swap with discard first"
+                                    : players[2].pendingCard
+                                    ? "Resolve drawn card first"
+                                    : "Stack this card"
+                                }
+                              >
+                                Stack
+                              </button>
+                            )}
+                            <div
+                              style={{
+                                ...styles.miniCardText,
+                                color: card.color === "red" ? "crimson" : "white",
+                              }}
+                            >
+                              {card.rank}
+                              {card.suit}
+                            </div>
+                          </div>
+                          {currentPlayer === 2 && players[2].pendingCard ? (
+                            <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
+                              Swap
+                            </button>
+                          ) : null}
+                          {currentPlayer === 2 && players[2].swappingWithDiscard ? (
+                            <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
+                              Swap with Discard
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={styles.cardPlaceholder}>No cards in hand</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* End Turn button */}
+            <div style={styles.endTurnContainer}>
+              <button style={styles.endTurnButton} onClick={switchTurn}>
+                End Turn → Player {currentPlayer === 1 ? 2 : 1}
+              </button>
             </div>
             </div>
         </div>
@@ -354,6 +456,13 @@ const styles = {
     margin: 0,
     opacity: 0.75,
     fontSize: 14,
+  },
+
+  turnIndicator: {
+    margin: 8,
+    fontSize: 16,
+    fontWeight: 700,
+    color: "rgba(34, 197, 94, 0.9)",
   },
 
   centerArea: {
@@ -565,6 +674,47 @@ const styles = {
     color: "white",
     cursor: "pointer",
     fontWeight: 700,
+  },
+
+  playersSection: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 24,
+    padding: "20px 0",
+    borderTop: "1px solid rgba(255,255,255,0.1)",
+  },
+
+  playerColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    alignItems: "center",
+  },
+
+  playerLabel: {
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: 0.2,
+    opacity: 0.9,
+  },
+
+  endTurnContainer: {
+    display: "flex",
+    justifyContent: "center",
+    padding: "16px 0",
+    borderTop: "1px solid rgba(255,255,255,0.1)",
+  },
+
+  endTurnButton: {
+    padding: "12px 24px",
+    fontSize: 14,
+    fontWeight: 700,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "linear-gradient(180deg, rgba(34, 197, 94, 0.25), rgba(34, 197, 94, 0.15))",
+    color: "white",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
   },
 };
 
