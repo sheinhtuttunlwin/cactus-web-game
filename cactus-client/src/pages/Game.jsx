@@ -1,7 +1,7 @@
 import { createShuffledDeck } from "../game/deck";
 import { useState } from "react";
 
-function MyCardTest () {
+function Game () {
 
     const [deck, setDeck] = useState(() => createShuffledDeck());
     const [discardPile, setDiscardPile] = useState([]);
@@ -113,7 +113,7 @@ function MyCardTest () {
         );
 }
 
-export default MyCardTest;
+export default Game;
 
 const styles = {
   page: {

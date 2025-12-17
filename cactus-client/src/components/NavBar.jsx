@@ -7,7 +7,7 @@ function NavBar() {
 
             <div style={styles.links}>
                 <Link to="/">Home</Link>
-                <Link to="/cards">Card Test</Link>
+                <Link to="/game">Game Page</Link>
             </div>
         </nav>
     );

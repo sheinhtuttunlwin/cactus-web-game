@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
-import CardTest from './pages/CardTest';
 import NavBar from './components/NavBar';
+import Game from './pages/Game';
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       <NavBar />  {/* Global Navigation Bar*/}
       <Routes>
         <Route path='/' element={<Home />} /> 
-        <Route path='/cards' element={<CardTest />} /> 
+        <Route path='/game' element={<Game />} /> 
       </Routes>
     </BrowserRouter>
   );

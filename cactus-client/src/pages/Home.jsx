@@ -8,7 +8,7 @@ function Home() {
 
           <p>Choose a page:</p>
 
-          <Link to='/cards'>Card Test Page</Link>
+          <Link to='/game'>Game Page</Link>
         </div>
       </>
     );
