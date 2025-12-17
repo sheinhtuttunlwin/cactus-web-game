@@ -1,30 +1,70 @@
 import { createShuffledDeck } from "../game/deck";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function Game () {
 
     const [deck, setDeck] = useState(() => createShuffledDeck());
     const [discardPile, setDiscardPile] = useState([]);
     const [currentCard, setCurrentCard] = useState(null);
+    const [pendingCard, setPendingCard] = useState(null);
+    const [hand, setHand] = useState([]);
+
+    // Deal 4 cards at the start of the game
+    useEffect(() => {
+      setDeck((prevDeck) => {
+        const newDeck = [...prevDeck];
+        const initialHand = [];
+        for (let i = 0; i < 4 && newDeck.length > 0; i++) {
+          initialHand.push(newDeck.pop());
+        }
+        setHand(initialHand);
+        return newDeck;
+      });
+    }, []);
 
     const handleDraw = () => {
+      if (deck.length === 0 || pendingCard) return;
+      const newDeck = [...deck];
+      const drawnCard = newDeck.pop();
+      setDeck(newDeck);
+      setPendingCard(drawnCard);
+      // clear the current card display when drawing
+      setCurrentCard(null);
+    };
 
-        if (deck.length === 0) {
-            return;
-        }
-        const newDeck = [...deck];
-        const drawnCard = newDeck.pop();
+    const handleDiscardPending = () => {
+      if (!pendingCard) return;
+      setDiscardPile((prev) => [...prev, pendingCard]);
+      // do not show the discarded card as the current card
+      setCurrentCard(null);
+      setPendingCard(null);
+    };
 
-
-        setDeck(newDeck);
-        setCurrentCard(drawnCard);
-        setDiscardPile([...discardPile, drawnCard]);
+    const handleSwapWith = (index) => {
+      if (!pendingCard) return;
+      setHand((prev) => {
+        const newHand = [...prev];
+        const replaced = newHand[index];
+        newHand[index] = pendingCard;
+        // put replaced card into discard
+        setDiscardPile((prevDiscard) => [...prevDiscard, replaced]);
+        return newHand;
+      });
+      // do not show the swapped-in card as the current card
+      setCurrentCard(null);
+      setPendingCard(null);
     };
 
     const handleResetDeck = () => {
-        setDeck(createShuffledDeck());
-        setDiscardPile([]);
-        setCurrentCard(null);
+      const fresh = createShuffledDeck();
+      const initialHand = [];
+      for (let i = 0; i < 4 && fresh.length > 0; i++) {
+        initialHand.push(fresh.pop());
+      }
+      setDeck(fresh);
+      setHand(initialHand);
+      setDiscardPile([]);
+      setCurrentCard(null);
     };
 
     return (
@@ -50,27 +90,37 @@ function Game () {
                 <div style={styles.currentLabel}>Current Card</div>
 
                 <div style={styles.cardFace}>
-                    {currentCard ? (
-                    <div
-                        style={{
-                        ...styles.cardText,
-                        color: currentCard.color === "red" ? "crimson" : "white",
-                        }}
-                    >
-                        {currentCard.rank}
-                        {currentCard.suit}
-                    </div>
-                    ) : (
-                    <div style={styles.cardPlaceholder}>Draw to reveal</div>
-                    )}
+                  {pendingCard ? (
+                  <div
+                    style={{
+                    ...styles.cardText,
+                    color: pendingCard.color === "red" ? "crimson" : "white",
+                    }}
+                  >
+                    {pendingCard.rank}
+                    {pendingCard.suit}
+                  </div>
+                  ) : currentCard ? (
+                  <div
+                    style={{
+                    ...styles.cardText,
+                    color: currentCard.color === "red" ? "crimson" : "white",
+                    }}
+                  >
+                    {currentCard.rank}
+                    {currentCard.suit}
+                  </div>
+                  ) : (
+                  <div style={styles.cardPlaceholder}>Draw to reveal</div>
+                  )}
                 </div>
 
                 <div style={styles.controls}>
                     <button
                     style={styles.button}
                     onClick={handleDraw}
-                    disabled={deck.length === 0}
-                    title={deck.length === 0 ? "Deck is empty" : "Draw a card"}
+                    disabled={deck.length === 0 || !!pendingCard}
+                    title={deck.length === 0 ? "Deck is empty" : pendingCard ? "Resolve drawn card first" : "Draw a card"}
                     >
                     Draw
                     </button>
@@ -78,6 +128,43 @@ function Game () {
                     <button style={styles.buttonSecondary} onClick={handleResetDeck}>
                     Reset
                     </button>
+
+                    {pendingCard ? (
+                      <button style={styles.button} onClick={handleDiscardPending} title="Discard drawn card">
+                        Discard
+                      </button>
+                    ) : null}
+                </div>
+                {/* Player hand */}
+                <div style={styles.handContainer}>
+                  {hand.length > 0 ? (
+                    <>
+                        <div style={styles.miniHand}>
+                          {hand.map((card, idx) => (
+                            <div key={card.id} style={styles.miniCardWrapper}>
+                              <div style={styles.miniCard}>
+                                <div
+                                  style={{
+                                    ...styles.miniCardText,
+                                    color: card.color === "red" ? "crimson" : "white",
+                                  }}
+                                >
+                                  {card.rank}
+                                  {card.suit}
+                                </div>
+                              </div>
+                              {pendingCard ? (
+                                <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
+                                  Swap
+                                </button>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                    </>
+                  ) : (
+                    <div style={styles.cardPlaceholder}>No cards in hand</div>
+                  )}
                 </div>
                 </div>
 
@@ -191,8 +278,7 @@ const styles = {
     height: 170,
     borderRadius: 16,
     border: "1px solid rgba(255,255,255,0.16)",
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))",
+    background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))",
     boxShadow: "0 12px 28px rgba(0,0,0,0.35)",
     display: "flex",
     alignItems: "center",
@@ -229,11 +315,10 @@ const styles = {
 
   cardFace: {
     width: 200,
-    height: 270,
+    height: 290,
     borderRadius: 22,
     border: "1px solid rgba(255,255,255,0.16)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03))",
     boxShadow: "0 16px 36px rgba(0,0,0,0.45)",
     display: "flex",
     alignItems: "center",
@@ -284,6 +369,56 @@ const styles = {
     cursor: "pointer",
     fontWeight: 700,
     opacity: 0.9,
+  },
+
+  handContainer: {
+    width: "100%",
+    display: "flex",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+
+  miniHand: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+  },
+  
+  miniCard: {
+    width: 90,
+    height: 130,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+  },
+
+  miniCardText: {
+    fontSize: 32,
+    fontWeight: 800,
+    letterSpacing: 0.8,
+    color: "#2E2E2E",
+  },
+  miniCardWrapper: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  swapSmall: {
+    padding: "6px 10px",
+    fontSize: 12,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+    boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+    color: "white",
+    cursor: "pointer",
+    fontWeight: 700,
   },
 };
 
