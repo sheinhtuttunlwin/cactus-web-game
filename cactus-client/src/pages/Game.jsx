@@ -124,8 +124,14 @@ function Game () {
       setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
       setCurrentCard(null);
       setPendingCard(null);
+      setSwappingWithDiscard(false);
     };
 
+    const actionButtonStyle = (baseStyle, disabled) => ({
+      ...baseStyle,
+      opacity: disabled ? 0.5 : 1,
+      cursor: disabled ? "not-allowed" : "pointer",
+    });
 
     return (
         <div style={styles.page}>
@@ -177,12 +183,20 @@ function Game () {
 
                 <div style={styles.controls}>
                     <button
-                    style={styles.button}
-                    onClick={handleDraw}
-                    disabled={deck.length === 0 || !!pendingCard || swappingWithDiscard}
-                    title={swappingWithDiscard ? "Cancel swap with discard first" : deck.length === 0 ? "Deck is empty" : pendingCard ? "Resolve drawn card first" : "Draw a card"}
+                      style={actionButtonStyle(styles.button, deck.length === 0 || !!pendingCard || swappingWithDiscard)}
+                      onClick={handleDraw}
+                      disabled={deck.length === 0 || !!pendingCard || swappingWithDiscard}
+                      title={
+                        swappingWithDiscard
+                          ? "Cancel swap with discard first"
+                          : deck.length === 0
+                          ? "Deck is empty"
+                          : pendingCard
+                          ? "Resolve drawn card first"
+                          : "Draw a card"
+                      }
                     >
-                    Draw
+                      Draw
                     </button>
 
                     <button style={styles.buttonSecondary} onClick={handleResetDeck}>
@@ -203,14 +217,21 @@ function Game () {
                           {hand.map((card, idx) => (
                             <div key={card.id} style={styles.miniCardWrapper}>
                               <div style={styles.miniCard}>
-                                <button 
-                                  style={{...styles.stackButton, opacity: pendingCard || swappingWithDiscard ? 0.5 : 1}}
-                                  onClick={() => handleStack(idx)} 
-                                  title={swappingWithDiscard ? "Cancel swap with discard first" : pendingCard ? "Resolve drawn card first" : "Stack this card"}
+                                <button
+                                  style={actionButtonStyle(styles.stackButton, !!pendingCard || swappingWithDiscard)}
+                                  onClick={() => handleStack(idx)}
                                   disabled={!!pendingCard || swappingWithDiscard}
+                                  title={
+                                    swappingWithDiscard
+                                      ? "Cancel swap with discard first"
+                                      : pendingCard
+                                      ? "Resolve drawn card first"
+                                      : "Stack this card"
+                                  }
                                 >
                                   Stack
                                 </button>
+
                                 <div
                                   style={{
                                     ...styles.miniCardText,
@@ -263,16 +284,16 @@ function Game () {
                 </div>
 
                 {discardPile.length > 0 ? (
-                  <button 
-                    style={{...styles.swapDiscardButton, opacity: pendingCard ? 0.5 : 1}}
+                  <button
+                    style={actionButtonStyle(styles.swapDiscardButton, !!pendingCard)}
                     onClick={() => setSwappingWithDiscard(!swappingWithDiscard)}
-                    title={pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
                     disabled={!!pendingCard}
+                    title={pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
                   >
                     {swappingWithDiscard ? "Cancel" : "Swap with Discard"}
                   </button>
-                ) : null}
 
+                ) : null}
                 <div style={styles.pileLabel}>
                     <div style={styles.pileName}>Discard</div>
                     <div style={styles.pileCount}>{discardPile.length} cards</div>
