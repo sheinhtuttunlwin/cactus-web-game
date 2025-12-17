@@ -9,10 +9,16 @@ function Game () {
     const [pendingCard, setPendingCard] = useState(null);
     const [hand, setHand] = useState([]);
 
-    // Deal 4 cards at the start of the game
+    // Deal 4 cards at the start of the game and put one card in discard pile
     useEffect(() => {
       setDeck((prevDeck) => {
         const newDeck = [...prevDeck];
+        // Pop one card to the discard pile
+        if (newDeck.length > 0) {
+          const firstDiscardCard = newDeck.pop();
+          setDiscardPile([firstDiscardCard]);
+        }
+        // Deal 4 cards to hand
         const initialHand = [];
         for (let i = 0; i < 4 && newDeck.length > 0; i++) {
           initialHand.push(newDeck.pop());
@@ -76,13 +82,15 @@ function Game () {
 
     const handleResetDeck = () => {
       const fresh = createShuffledDeck();
+      // Pop one card to the discard pile
+      const firstDiscardCard = fresh.pop();
       const initialHand = [];
       for (let i = 0; i < 4 && fresh.length > 0; i++) {
         initialHand.push(fresh.pop());
       }
       setDeck(fresh);
       setHand(initialHand);
-      setDiscardPile([]);
+      setDiscardPile([firstDiscardCard]);
       setCurrentCard(null);
     };
 
