@@ -1,4 +1,5 @@
 import { createShuffledDeck } from "./deck";
+import { getPowerForCard } from "./powers";
 
 export function dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound }) {
   const fresh = createShuffledDeck();
@@ -17,8 +18,8 @@ export function dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPla
   setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
   setHasStackedThisRound(false);
   setPlayers({
-    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
+    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
+    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
   });
   setCurrentPlayer(1);
 }
@@ -30,7 +31,10 @@ export function handleDraw({ deck, setDeck, players, setPlayers, currentPlayer }
   setDeck(newDeck);
   setPlayers((prev) => ({
     ...prev,
-    [currentPlayer]: { ...prev[currentPlayer], pendingCard: drawnCard },
+    [currentPlayer]: {
+      ...prev[currentPlayer],
+      pendingCard: drawnCard,
+    },
   }));
 }
 
@@ -39,9 +43,11 @@ export function handleDiscardPending({ players, setPlayers, currentPlayer, setDi
   if (!pendingCard) return;
   setDiscardPile((prev) => [...prev, pendingCard]);
   setHasStackedThisRound(false);
+  // If the discarded card grants a power, give it to the player now
+  const power = getPowerForCard(pendingCard);
   setPlayers((prev) => ({
     ...prev,
-    [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
+    [currentPlayer]: { ...prev[currentPlayer], pendingCard: null, activePower: power || prev[currentPlayer].activePower },
   }));
   setCurrentPlayer((p) => (p === 1 ? 2 : 1));
 }
@@ -151,8 +157,8 @@ export function handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurren
 
   setDeck(fresh);
   setPlayers({
-    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
+    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
+    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
   });
   setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
   setHasStackedThisRound(false);

@@ -1,4 +1,5 @@
 import * as actions from "../game/actions";
+import { SELF_PEEK } from "../game/powers";
 import { useState, useEffect } from "react";
 
 function Game () {
@@ -8,8 +9,8 @@ function Game () {
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
     const [players, setPlayers] = useState({
-      1: { hand: [], pendingCard: null, swappingWithDiscard: false },
-      2: { hand: [], pendingCard: null, swappingWithDiscard: false },
+      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
+      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
     });
 
     // Deal 4 cards to each player at game start and put one card in discard pile
@@ -205,6 +206,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
+                                filter: players[1].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -219,6 +221,22 @@ function Game () {
                           {currentPlayer === 1 && players[1].swappingWithDiscard ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
                               Swap with Discard
+                            </button>
+                          ) : null}
+                          {players[1].activePower === SELF_PEEK ? (
+                            <button
+                              style={styles.swapSmall}
+                              onClick={() => {
+                                setPlayers((prev) => ({
+                                  ...prev,
+                                  1: { ...prev[1], revealedCardId: card.id, activePower: null },
+                                }));
+                                setTimeout(() => {
+                                  setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null } }));
+                                }, 4000);
+                              }}
+                            >
+                              Look
                             </button>
                           ) : null}
                         </div>
@@ -256,6 +274,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
+                                filter: players[2].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -270,6 +289,22 @@ function Game () {
                           {currentPlayer === 2 && players[2].swappingWithDiscard ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
                               Swap with Discard
+                            </button>
+                          ) : null}
+                          {players[2].activePower === SELF_PEEK ? (
+                            <button
+                              style={styles.swapSmall}
+                              onClick={() => {
+                                setPlayers((prev) => ({
+                                  ...prev,
+                                  2: { ...prev[2], revealedCardId: card.id, activePower: null },
+                                }));
+                                setTimeout(() => {
+                                  setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null } }));
+                                }, 4000);
+                              }}
+                            >
+                              Look
                             </button>
                           ) : null}
                         </div>
