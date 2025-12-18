@@ -1,256 +1,8 @@
 import * as actions from "../game/actions";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
-
-const PowerTimeIndicator = ({ expiresAt, label, variant = "swap" }) => {
-  const [remaining, setRemaining] = useState(0);
-
-  useEffect(() => {
-    if (!expiresAt) return setRemaining(0);
-    let id = null;
-    const tick = () => {
-      const now = Date.now();
-      const ms = Math.max(0, expiresAt - now);
-      setRemaining(ms);
-      if (ms > 0) id = setTimeout(tick, 100);
-    };
-    tick();
-    return () => { if (id) clearTimeout(id); };
-  }, [expiresAt]);
-
-  if (!expiresAt || remaining <= 0) return null;
-
-  const seconds = (remaining / 1000).toFixed(1);
-  const fraction = Math.min(1, Math.max(0, remaining / 10000));
-
-  const palettes = {
-    swap: {
-      border: "rgba(147,51,234,0.4)",
-      bg: "rgba(147,51,234,0.12)",
-      text: "#e9d5ff",
-      bar: "rgba(147,51,234,0.25)",
-    },
-    opponent: {
-      border: "rgba(59,130,246,0.45)",
-      bg: "rgba(59,130,246,0.12)",
-      text: "#dbeafe",
-      bar: "rgba(59,130,246,0.28)",
-    },
-    self: {
-      border: "rgba(34,197,94,0.45)",
-      bg: "rgba(34,197,94,0.12)",
-      text: "#dcfce7",
-      bar: "rgba(34,197,94,0.28)",
-    },
-  };
-  const { border, bg, text: textColor, bar: barColor } = palettes[variant] || palettes.swap;
-
-  const container = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "2px 6px",
-    borderRadius: 999,
-    border: `1px solid ${border}`,
-    background: bg,
-    color: textColor,
-    marginLeft: 8,
-    position: "relative",
-    overflow: "hidden",
-    fontSize: 12,
-    lineHeight: 1,
-  };
-  const barStyle = {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: `${fraction * 100}%`,
-    background: barColor,
-    transition: "width 100ms linear",
-  };
-  const labelStyle = { position: "relative", zIndex: 1, fontWeight: 700 };
-  const timeStyle = { position: "relative", zIndex: 1, opacity: 0.9 };
-
-  return (
-    <span style={container} title="Power time left">
-      <span style={barStyle} />
-      <span style={labelStyle}>{label}</span>
-      <span style={timeStyle}>{seconds}s</span>
-    </span>
-  );
-};
-
-const LookButton = ({ expiresAt, onClick }) => {
-  const [progress, setProgress] = useState(1);
-
-  useEffect(() => {
-    if (!expiresAt) return setProgress(0);
-    let timerId = null;
-    const tick = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, expiresAt - now);
-      setProgress(remaining / 10000); // fraction 0..1
-      if (remaining > 0) {
-        timerId = setTimeout(tick, 100); // update every 100ms instead of every frame
-      }
-    };
-    tick();
-    return () => { if (timerId) clearTimeout(timerId); };
-  }, [expiresAt]);
-
-  if (!expiresAt || progress <= 0) return null;
-
-  const container = {
-    width: 70,
-    height: 22,
-    padding: 2,
-    borderRadius: 6,
-    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    color: "#fff",
-    fontSize: 12,
-    position: "relative",
-    overflow: "hidden",
-  };
-  const bar = {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: `${progress * 100}%`,
-    background: "rgba(34,197,94,0.5)",
-    transition: "width 100ms linear",
-  };
-  const label = { zIndex: 2, fontWeight: 700 };
-
-  return (
-    <div style={container} onClick={onClick} title="Use Look power">
-      <div style={bar} />
-      <div style={label}>Look</div>
-    </div>
-  );
-};
-
-const RevealProgressBar = ({ expiresAt, onClick }) => {
-  const [progress, setProgress] = useState(1);
-
-  useEffect(() => {
-    if (!expiresAt) return setProgress(0);
-    let timerId = null;
-    const tick = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, expiresAt - now);
-      setProgress(remaining / 4000); // 4s reveal duration
-      if (remaining > 0) {
-        timerId = setTimeout(tick, 100);
-      }
-    };
-    tick();
-    return () => { if (timerId) clearTimeout(timerId); };
-  }, [expiresAt]);
-
-  if (!expiresAt || progress <= 0) return null;
-
-  const container = {
-    width: 70,
-    height: 22,
-    padding: 2,
-    borderRadius: 6,
-    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    color: "#fff",
-    fontSize: 12,
-    position: "relative",
-    overflow: "hidden",
-  };
-  const bar = {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: `${progress * 100}%`,
-    background: "rgba(100,200,255,0.5)",
-    transition: "width 100ms linear",
-  };
-  const label = { zIndex: 2, fontWeight: 700 };
-
-  return (
-    <div style={container} onClick={onClick} title="Close card reveal">
-      <div style={bar} />
-      <div style={label}>Close</div>
-    </div>
-  );
-};
-
-const SwapProgressBar = ({ progress, onClick, isSelected }) => {
-  const container = {
-    width: 70,
-    height: 22,
-    padding: 2,
-    borderRadius: 6,
-    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    color: "#fff",
-    fontSize: 11,
-    position: "relative",
-    overflow: "hidden",
-    border: isSelected ? "2px solid #ffa500" : "none",
-  };
-  const bar = {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: `${progress * 100}%`,
-    background: "rgba(147,51,234,0.5)",
-    transition: "width 100ms linear",
-  };
-  const labelStyle = { zIndex: 2, fontWeight: 700, textAlign: "center" };
-
-  const text = progress < 0.5 ? "Swap" : "Swap 2nd";
-
-  return (
-    <div style={container} onClick={onClick}>
-      <div style={bar} />
-      <div style={labelStyle}>{text}</div>
-    </div>
-  );
-};
-
-const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, swapProgress, isSelected, hideIfOwnerSelected = false, buttonLabel = "Look" }) => {
-  if (power === SWAP_ANY && hideIfOwnerSelected) return null;
-  if (activePower === power && activePowerToken) {
-    if (power === SWAP_ANY) {
-      return (
-        <SwapProgressBar
-          progress={swapProgress}
-          onClick={onClick}
-          isSelected={isSelected}
-        />
-      );
-    }
-    return (
-      <LookButton
-        expiresAt={activePowerExpiresAt}
-        onClick={onClick}
-      />
-    );
-  }
-  if (showClose && cardRevealExpiresAt && revealedCardId === cardId) {
-    return <RevealProgressBar expiresAt={cardRevealExpiresAt} onClick={onClose} />;
-  }
-  return null;
-};
+import { PowerTimeIndicator, PowerButton } from "../components/power/PowerUI";
+import * as powerEffects from "../game/powerEffects";
 
 function Game () {
 
@@ -310,33 +62,16 @@ function Game () {
     };
 
     const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
-      const swapPowerActive = players[1].activePower === SWAP_ANY || players[2].activePower === SWAP_ANY;
-      if (!swapPowerActive) return;
-
-      if (swapAnimation) return; // ignore clicks while animating
-
-      if (!swapFirstCard) {
-        setSwapFirstCard({ playerId, cardIndex, cardId });
-        return;
-      }
-
-      // same card clicked -> cancel
-      if (swapFirstCard.playerId === playerId && swapFirstCard.cardIndex === cardIndex) {
-        setSwapFirstCard(null);
-        return;
-      }
-
-      // start short fill animation, then perform swap when complete
-      const duration = 360; // ms
-      const anim = {
-        from: swapFirstCard,
-        to: { playerId, cardIndex, cardId },
-        start: Date.now(),
-        duration,
-        progress: 0,
-        done: false,
-      };
-      setSwapAnimation(anim);
+      powerEffects.handleSwapAnySelection(
+        playerId,
+        cardIndex,
+        cardId,
+        players,
+        swapFirstCard,
+        swapAnimation,
+        setSwapFirstCard,
+        setSwapAnimation
+      );
     };
 
 
@@ -345,63 +80,12 @@ function Game () {
     };
 
     useEffect(() => {
-      if (!swapAnimation) return;
-      const { from, to, start, duration } = swapAnimation;
-      let swapped = false;
-      const id = setInterval(() => {
-        const now = Date.now();
-        const progress = Math.min(1, (now - start) / duration);
-        setSwapAnimation((prev) => (prev ? { ...prev, progress } : prev));
-
-        // perform actual swap at halfway point
-        if (progress >= 0.5 && !swapped) {
-          swapped = true;
-          setPlayers((prev) => {
-            const next = { ...prev };
-
-            const pAId = from.playerId;
-            const pBId = to.playerId;
-
-            const pA = { ...next[pAId], hand: [...next[pAId].hand] };
-            const pB = { ...next[pBId], hand: [...next[pBId].hand] };
-
-            const cardA = pA.hand[from.cardIndex];
-            const cardB = pB.hand[to.cardIndex];
-
-            pA.hand[from.cardIndex] = cardB;
-            pB.hand[to.cardIndex] = cardA;
-
-            next[pAId] = pA;
-            next[pBId] = pB;
-
-            Object.keys(next).forEach((id) => {
-              const pid = Number(id);
-              if (next[pid].activePower === SWAP_ANY) {
-                next[pid] = {
-                  ...next[pid],
-                  activePower: null,
-                  activePowerToken: null,
-                  activePowerExpiresAt: null,
-                  activePowerLabel: null,
-                };
-              }
-            });
-
-            return next;
-          });
-
-          // mark done so second half can animate the poof-in
-          setSwapAnimation((prev) => (prev ? { ...prev, done: true } : prev));
-        }
-
-        if (progress >= 1) {
-          clearInterval(id);
-          setSwapAnimation(null);
-          setSwapFirstCard(null);
-        }
-      }, 40);
-
-      return () => clearInterval(id);
+      return powerEffects.runSwapAnimation(
+        swapAnimation,
+        setSwapAnimation,
+        setPlayers,
+        setSwapFirstCard
+      );
     }, [swapAnimation]);
 
     const actionButtonStyle = (baseStyle, disabled) => ({
@@ -623,19 +307,8 @@ function Game () {
                             cardRevealExpiresAt={players[1].cardRevealExpiresAt}
                             revealedCardId={players[1].revealedCardId}
                             cardId={card.id}
-                            onClick={() => {
-                              const revealEnds = Date.now() + 4000;
-                              setPlayers((prev) => ({
-                                ...prev,
-                                1: { ...prev[1], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, cardRevealExpiresAt: revealEnds },
-                              }));
-                              setTimeout(() => {
-                                setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
-                              }, 4000);
-                            }}
-                            onClose={() => {
-                              setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
-                            }}
+                            onClick={() => powerEffects.activateSelfPeek(1, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
                           />
                           <PowerButton
                             power={OPPONENT_PEEK}
@@ -646,26 +319,8 @@ function Game () {
                             revealedCardId={players[1].revealedCardId}
                             cardId={card.id}
                             showClose={false}
-                            onClick={() => {
-                              const revealEnds = Date.now() + 4000;
-                              setPlayers((prev) => ({
-                                ...prev,
-                                1: { ...prev[1], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
-                                2: { ...prev[2], activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null },
-                              }));
-                              setTimeout(() => {
-                                setPlayers((prev) => ({ 
-                                  ...prev, 
-                                  1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null }
-                                }));
-                              }, 4000);
-                            }}
-                            onClose={() => {
-                              setPlayers((prev) => ({ 
-                                ...prev, 
-                                1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null }
-                              }));
-                            }}
+                            onClick={() => powerEffects.activateOpponentPeek(1, 2, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
                           />
                           {isCardSelected ? (
                             <button
@@ -802,19 +457,8 @@ function Game () {
                             cardRevealExpiresAt={players[2].cardRevealExpiresAt}
                             revealedCardId={players[2].revealedCardId}
                             cardId={card.id}
-                            onClick={() => {
-                              const revealEnds = Date.now() + 4000;
-                              setPlayers((prev) => ({
-                                ...prev,
-                                2: { ...prev[2], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, cardRevealExpiresAt: revealEnds },
-                              }));
-                              setTimeout(() => {
-                                setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
-                              }, 4000);
-                            }}
-                            onClose={() => {
-                              setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
-                            }}
+                            onClick={() => powerEffects.activateSelfPeek(2, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
                           />
                           <PowerButton
                             power={OPPONENT_PEEK}
@@ -825,26 +469,8 @@ function Game () {
                             revealedCardId={players[2].revealedCardId}
                             cardId={card.id}
                             showClose={false}
-                            onClick={() => {
-                              const revealEnds = Date.now() + 4000;
-                              setPlayers((prev) => ({
-                                ...prev,
-                                2: { ...prev[2], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
-                                1: { ...prev[1], activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null },
-                              }));
-                              setTimeout(() => {
-                                setPlayers((prev) => ({ 
-                                  ...prev, 
-                                  2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null }
-                                }));
-                              }, 4000);
-                            }}
-                            onClose={() => {
-                              setPlayers((prev) => ({ 
-                                ...prev, 
-                                2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null }
-                              }));
-                            }}
+                            onClick={() => powerEffects.activateOpponentPeek(2, 1, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
                           />
                           {isCardSelected ? (
                             <button
