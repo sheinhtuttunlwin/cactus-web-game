@@ -1,5 +1,5 @@
 import * as actions from "../game/actions";
-import { SELF_PEEK, OPPONENT_PEEK } from "../game/powers";
+import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
 
 const LookButton = ({ expiresAt, onClick }) => {
@@ -110,8 +110,56 @@ const RevealProgressBar = ({ expiresAt, onClick }) => {
   );
 };
 
-const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, buttonLabel = "Look" }) => {
+const SwapProgressBar = ({ progress, onClick, isSelected }) => {
+  const container = {
+    width: 70,
+    height: 22,
+    padding: 2,
+    borderRadius: 6,
+    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "#fff",
+    fontSize: 11,
+    position: "relative",
+    overflow: "hidden",
+    border: isSelected ? "2px solid #ffa500" : "none",
+  };
+  const bar = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: `${progress * 100}%`,
+    background: "rgba(147,51,234,0.5)",
+    transition: "width 100ms linear",
+  };
+  const labelStyle = { zIndex: 2, fontWeight: 700, textAlign: "center" };
+
+  const text = progress < 0.5 ? "Swap" : "Swap 2nd";
+
+  return (
+    <div style={container} onClick={onClick}>
+      <div style={bar} />
+      <div style={labelStyle}>{text}</div>
+    </div>
+  );
+};
+
+const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, swapProgress, isSelected, hideIfOwnerSelected = false, buttonLabel = "Look" }) => {
+  if (power === SWAP_ANY && hideIfOwnerSelected) return null;
   if (activePower === power && activePowerToken) {
+    if (power === SWAP_ANY) {
+      return (
+        <SwapProgressBar
+          progress={swapProgress}
+          onClick={onClick}
+          isSelected={isSelected}
+        />
+      );
+    }
     return (
       <LookButton
         expiresAt={activePowerExpiresAt}
@@ -131,6 +179,7 @@ function Game () {
     const [discardPile, setDiscardPile] = useState([]);
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
+    const [swapFirstCard, setSwapFirstCard] = useState(null); // { playerId, cardIndex, cardId }
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -179,6 +228,59 @@ function Game () {
     const handleSwapWithDiscard = (index) => {
       actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
+
+    const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
+      const swapPowerActive = players[1].activePower === SWAP_ANY || players[2].activePower === SWAP_ANY;
+      if (!swapPowerActive) return;
+
+      if (!swapFirstCard) {
+        setSwapFirstCard({ playerId, cardIndex, cardId });
+        return;
+      }
+
+      // same card clicked -> cancel
+      if (swapFirstCard.playerId === playerId && swapFirstCard.cardIndex === cardIndex) {
+        setSwapFirstCard(null);
+        return;
+      }
+
+      // ✅ THIS is where it goes (second click does the swap)
+      setPlayers((prev) => {
+        const next = { ...prev };
+
+        const pAId = swapFirstCard.playerId;
+        const pBId = playerId;
+
+        const pA = { ...next[pAId], hand: [...next[pAId].hand] };
+        const pB = { ...next[pBId], hand: [...next[pBId].hand] };
+
+        const cardA = pA.hand[swapFirstCard.cardIndex];
+        const cardB = pB.hand[cardIndex];
+
+        pA.hand[swapFirstCard.cardIndex] = cardB;
+        pB.hand[cardIndex] = cardA;
+
+        next[pAId] = pA;
+        next[pBId] = pB;
+
+        Object.keys(next).forEach((id) => {
+          const pid = Number(id);
+          if (next[pid].activePower === SWAP_ANY) {
+            next[pid] = {
+              ...next[pid],
+              activePower: null,
+              activePowerToken: null,
+              activePowerExpiresAt: null,
+            };
+          }
+        });
+
+        return next;
+      });
+
+      setSwapFirstCard(null);
+    };
+
 
     const handleResetDeck = () => {
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
@@ -308,9 +410,14 @@ function Game () {
                 <div style={styles.handContainer}>
                   {players[1].hand.length > 0 ? (
                     <div style={players[1].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
-                      {players[1].hand.map((card, idx) => (
-                        <div key={card.id} style={styles.miniCardWrapper}>
-                          <div style={styles.miniCard}>
+                      {players[1].hand.map((card, idx) => {
+                        const isCardSelected = swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx;
+                        return (
+                        <div key={card.id} style={{
+                          ...styles.miniCardWrapper,
+                          position: "relative",
+                        }}>
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {})}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
                               onClick={() => handleStack(1, idx)}
@@ -398,8 +505,27 @@ function Game () {
                               }));
                             }}
                           />
+                          {isCardSelected ? (
+                            <button
+                              style={styles.cancelSelect}
+                              onClick={() => setSwapFirstCard(null)}
+                              title="Cancel selection"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                          <PowerButton
+                            power={SWAP_ANY}
+                            activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
+                            activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
+                            swapProgress={swapFirstCard ? (swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx ? 0.5 : 0) : 0}
+                            isSelected={swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx}
+                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 1}
+                            onClick={() => handleSwapAnyCard(1, idx, card.id)}
+                          />
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   ) : (
                     <div style={styles.cardPlaceholder}>No cards in hand</div>
@@ -412,9 +538,14 @@ function Game () {
                 <div style={styles.handContainer}>
                   {players[2].hand.length > 0 ? (
                     <div style={players[2].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
-                      {players[2].hand.map((card, idx) => (
-                        <div key={card.id} style={styles.miniCardWrapper}>
-                          <div style={styles.miniCard}>
+                      {players[2].hand.map((card, idx) => {
+                        const isCardSelected = swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx;
+                        return (
+                        <div key={card.id} style={{
+                          ...styles.miniCardWrapper,
+                          position: "relative",
+                        }}>
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {})}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
                               onClick={() => handleStack(2, idx)}
@@ -502,8 +633,27 @@ function Game () {
                               }));
                             }}
                           />
+                          {isCardSelected ? (
+                            <button
+                              style={styles.cancelSelect}
+                              onClick={() => setSwapFirstCard(null)}
+                              title="Cancel selection"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                          <PowerButton
+                            power={SWAP_ANY}
+                            activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
+                            activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
+                            swapProgress={swapFirstCard ? (swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx ? 0.5 : 0) : 0}
+                            isSelected={swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx}
+                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 2}
+                            onClick={() => handleSwapAnyCard(2, idx, card.id)}
+                          />
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   ) : (
                     <div style={styles.cardPlaceholder}>No cards in hand</div>
@@ -727,6 +877,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+    transition: "transform 180ms ease, box-shadow 180ms ease, filter 180ms ease",
     position: "relative",
   },
 
@@ -742,6 +893,30 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
+  },
+
+  cancelSelect: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    background: "rgba(0,0,0,0.6)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontWeight: 800,
+    boxShadow: "0 8px 20px rgba(255,165,0,0.14)",
+  },
+
+  selectedMiniCard: {
+    transform: "translateY(-8px)",
+    boxShadow: "0 20px 48px rgba(255,165,0,0.14), 0 8px 28px rgba(0,0,0,0.45)",
+    filter: "drop-shadow(0 6px 18px rgba(255,165,0,0.18))",
   },
 
   stackButton: {
