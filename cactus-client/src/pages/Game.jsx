@@ -1,4 +1,5 @@
 import { createShuffledDeck } from "../game/deck";
+import * as actions from "../game/actions";
 import { useState, useEffect } from "react";
 
 function Game () {
@@ -14,27 +15,7 @@ function Game () {
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
-      const fresh = createShuffledDeck();
-
-      const firstDiscardCard = fresh.pop();
-      const player1Hand = [];
-      const player2Hand = [];
-
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player1Hand.push(fresh.pop());
-      }
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player2Hand.push(fresh.pop());
-      }
-
-      setDeck(fresh);
-      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setHasStackedThisRound(false);
-      setPlayers({
-        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
-      });
-      setCurrentPlayer(1);
+      actions.dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound });
     }, []);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
@@ -48,143 +29,36 @@ function Game () {
     }, [players[currentPlayer].pendingCard, currentPlayer]);
 
     const handleDraw = () => {
-      if (deck.length === 0 || players[currentPlayer].pendingCard) return;
-      const newDeck = [...deck];
-      const drawnCard = newDeck.pop();
-      setDeck(newDeck);
-      setPlayers((prev) => ({
-        ...prev,
-        [currentPlayer]: { ...prev[currentPlayer], pendingCard: drawnCard },
-      }));
+      actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
     };
 
     const handleDiscardPending = () => {
-      const pendingCard = players[currentPlayer].pendingCard;
-      if (!pendingCard) return;
-      setDiscardPile((prev) => [...prev, pendingCard]);
-      setHasStackedThisRound(false);
-      setPlayers((prev) => ({
-        ...prev,
-        [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
-      }));
-      setTimeout(switchTurn, 0);
+      actions.handleDiscardPending({ players, setPlayers, currentPlayer, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
 
     const handleSwapWith = (index) => {
-      const pendingCard = players[currentPlayer].pendingCard;
-      if (!pendingCard) return;
-
-      const replaced = players[currentPlayer].hand[index];
-      setPlayers((prev) => {
-        const newHand = [...prev[currentPlayer].hand];
-        newHand[index] = pendingCard;
-        return {
-          ...prev,
-          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, pendingCard: null },
-        };
-      });
-      setDiscardPile((prev) => [...prev, replaced]);
-      setHasStackedThisRound(false);
-      setTimeout(switchTurn, 0);
+      actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
 
 
     const handleStack = (playerNum, index) => {
-      const lastDiscardedCard = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
-      const handCard = players[playerNum].hand[index];
-      
-      if (!lastDiscardedCard) {
-        alert("No card to stack on (discard pile is empty)");
-        return;
-      }
-
-      // Guard: must always have at least 1 card in hand
-      if (players[playerNum].hand.length === 1) {
-        alert("You must keep at least 1 card in your hand");
-        return;
-      }
-
-      // Guard: this card has already been stacked on this round
       if (hasStackedThisRound) {
         alert("This card has already been stacked on. Discard or swap to add a new card.");
         return;
       }
-      
-      if (handCard.rank === lastDiscardedCard.rank) {
-        // ranks match, discard the hand card
-        setPlayers((prev) => ({
-          ...prev,
-          [playerNum]: {
-            ...prev[playerNum],
-            hand: prev[playerNum].hand.filter((_, i) => i !== index),
-          },
-        }));
-        setDiscardPile((prev) => [...prev, handCard]);
-        setHasStackedThisRound(true);
-      } else {
-        // ranks don't match, add 2 cards from deck to hand as penalty
-        alert("does not match");
-        const newDeck = [...deck];
-        const cardsToAdd = [];
-        for (let i = 0; i < 2 && newDeck.length > 0; i++) {
-          cardsToAdd.push(newDeck.pop());
-        }
-        setDeck(newDeck);
-        setPlayers((prev) => ({
-          ...prev,
-          [playerNum]: {
-            ...prev[playerNum],
-            hand: [...prev[playerNum].hand, ...cardsToAdd],
-          },
-        }));
+
+      const result = actions.handleStack({ discardPile, players, setPlayers, playerNum, index, deck, setDeck, setHasStackedThisRound });
+      if (result && result.success) {
+        actions.finalizeStack({ setDiscardPile, handCard: result.card, setHasStackedThisRound });
       }
     };
 
     const handleSwapWithDiscard = (index) => {
-      const lastDiscardedCard = discardPile[discardPile.length - 1];
-      const handCard = players[currentPlayer].hand[index];
-
-      // Swap: hand card goes to discard, discard card goes to hand
-      setPlayers((prev) => {
-        const newHand = [...prev[currentPlayer].hand];
-        newHand[index] = lastDiscardedCard;
-        return {
-          ...prev,
-          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, swappingWithDiscard: false },
-        };
-      });
-
-      setDiscardPile((prev) => {
-        const newPile = [...prev];
-        newPile[newPile.length - 1] = handCard;
-        return newPile;
-      });
-      setHasStackedThisRound(false);
-      setTimeout(switchTurn, 0);
+      actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
 
     const handleResetDeck = () => {
-      const fresh = createShuffledDeck();
-
-      const firstDiscardCard = fresh.pop();
-      const player1Hand = [];
-      const player2Hand = [];
-
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player1Hand.push(fresh.pop());
-      }
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player2Hand.push(fresh.pop());
-      }
-
-      setDeck(fresh);
-      setPlayers({
-        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
-      });
-      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setHasStackedThisRound(false);
-      setCurrentPlayer(1);
+      actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
     };
 
     const actionButtonStyle = (baseStyle, disabled) => ({
@@ -194,7 +68,7 @@ function Game () {
     });
 
     const switchTurn = () => {
-      setCurrentPlayer((p) => (p === 1 ? 2 : 1));
+      actions.switchTurn(setCurrentPlayer);
     };
 
 
