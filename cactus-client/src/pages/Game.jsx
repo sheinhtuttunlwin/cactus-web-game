@@ -2,6 +2,129 @@ import * as actions from "../game/actions";
 import { SELF_PEEK } from "../game/powers";
 import { useState, useEffect } from "react";
 
+const LookButton = ({ expiresAt, onClick }) => {
+  const [progress, setProgress] = useState(1);
+
+  useEffect(() => {
+    if (!expiresAt) return setProgress(0);
+    let timerId = null;
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, expiresAt - now);
+      setProgress(remaining / 10000); // fraction 0..1
+      if (remaining > 0) {
+        timerId = setTimeout(tick, 100); // update every 100ms instead of every frame
+      }
+    };
+    tick();
+    return () => { if (timerId) clearTimeout(timerId); };
+  }, [expiresAt]);
+
+  if (!expiresAt || progress <= 0) return null;
+
+  const container = {
+    width: 70,
+    height: 22,
+    padding: 2,
+    borderRadius: 6,
+    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "#fff",
+    fontSize: 12,
+    position: "relative",
+    overflow: "hidden",
+  };
+  const bar = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: `${progress * 100}%`,
+    background: "rgba(34,197,94,0.5)",
+    transition: "width 100ms linear",
+  };
+  const label = { zIndex: 2, fontWeight: 700 };
+
+  return (
+    <div style={container} onClick={onClick} title="Use Look power">
+      <div style={bar} />
+      <div style={label}>Look</div>
+    </div>
+  );
+};
+
+const RevealProgressBar = ({ expiresAt, onClick }) => {
+  const [progress, setProgress] = useState(1);
+
+  useEffect(() => {
+    if (!expiresAt) return setProgress(0);
+    let timerId = null;
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, expiresAt - now);
+      setProgress(remaining / 4000); // 4s reveal duration
+      if (remaining > 0) {
+        timerId = setTimeout(tick, 100);
+      }
+    };
+    tick();
+    return () => { if (timerId) clearTimeout(timerId); };
+  }, [expiresAt]);
+
+  if (!expiresAt || progress <= 0) return null;
+
+  const container = {
+    width: 70,
+    height: 22,
+    padding: 2,
+    borderRadius: 6,
+    background: "linear-gradient(180deg,#2b2b2b,#1e1e1e)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "#fff",
+    fontSize: 12,
+    position: "relative",
+    overflow: "hidden",
+  };
+  const bar = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: `${progress * 100}%`,
+    background: "rgba(100,200,255,0.5)",
+    transition: "width 100ms linear",
+  };
+  const label = { zIndex: 2, fontWeight: 700 };
+
+  return (
+    <div style={container} onClick={onClick} title="Close card reveal">
+      <div style={bar} />
+      <div style={label}>Close</div>
+    </div>
+  );
+};
+
+const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, onClick, onClose, buttonLabel = "Look" }) => {
+  if (activePower === power && activePowerToken) {
+    return (
+      <LookButton
+        expiresAt={activePowerExpiresAt}
+        onClick={onClick}
+      />
+    );
+  }
+  if (cardRevealExpiresAt) {
+    return <RevealProgressBar expiresAt={cardRevealExpiresAt} onClick={onClose} />;
+  }
+  return null;
+};
+
 function Game () {
 
     const [deck, setDeck] = useState([]);
@@ -9,8 +132,8 @@ function Game () {
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
     const [players, setPlayers] = useState({
-      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
-      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, revealedCardId: null },
+      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
+      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
     });
 
     // Deal 4 cards to each player at game start and put one card in discard pile
@@ -223,22 +346,26 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
-                          {players[1].activePower === SELF_PEEK ? (
-                            <button
-                              style={styles.swapSmall}
-                              onClick={() => {
-                                setPlayers((prev) => ({
-                                  ...prev,
-                                  1: { ...prev[1], revealedCardId: card.id, activePower: null },
-                                }));
-                                setTimeout(() => {
-                                  setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null } }));
-                                }, 4000);
-                              }}
-                            >
-                              Look
-                            </button>
-                          ) : null}
+                          <PowerButton
+                            power={SELF_PEEK}
+                            activePower={players[1].activePower}
+                            activePowerToken={players[1].activePowerToken}
+                            activePowerExpiresAt={players[1].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[1].cardRevealExpiresAt}
+                            onClick={() => {
+                              const revealEnds = Date.now() + 4000;
+                              setPlayers((prev) => ({
+                                ...prev,
+                                1: { ...prev[1], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, cardRevealExpiresAt: revealEnds },
+                              }));
+                              setTimeout(() => {
+                                setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
+                              }, 4000);
+                            }}
+                            onClose={() => {
+                              setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
+                            }}
+                          />
                         </div>
                       ))}
                     </div>
@@ -291,22 +418,26 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
-                          {players[2].activePower === SELF_PEEK ? (
-                            <button
-                              style={styles.swapSmall}
-                              onClick={() => {
-                                setPlayers((prev) => ({
-                                  ...prev,
-                                  2: { ...prev[2], revealedCardId: card.id, activePower: null },
-                                }));
-                                setTimeout(() => {
-                                  setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null } }));
-                                }, 4000);
-                              }}
-                            >
-                              Look
-                            </button>
-                          ) : null}
+                          <PowerButton
+                            power={SELF_PEEK}
+                            activePower={players[2].activePower}
+                            activePowerToken={players[2].activePowerToken}
+                            activePowerExpiresAt={players[2].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[2].cardRevealExpiresAt}
+                            onClick={() => {
+                              const revealEnds = Date.now() + 4000;
+                              setPlayers((prev) => ({
+                                ...prev,
+                                2: { ...prev[2], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, cardRevealExpiresAt: revealEnds },
+                              }));
+                              setTimeout(() => {
+                                setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
+                              }, 4000);
+                            }}
+                            onClose={() => {
+                              setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
+                            }}
+                          />
                         </div>
                       ))}
                     </div>
