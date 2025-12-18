@@ -2,6 +2,85 @@ import * as actions from "../game/actions";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
 
+const PowerTimeIndicator = ({ expiresAt, label, variant = "swap" }) => {
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    if (!expiresAt) return setRemaining(0);
+    let id = null;
+    const tick = () => {
+      const now = Date.now();
+      const ms = Math.max(0, expiresAt - now);
+      setRemaining(ms);
+      if (ms > 0) id = setTimeout(tick, 100);
+    };
+    tick();
+    return () => { if (id) clearTimeout(id); };
+  }, [expiresAt]);
+
+  if (!expiresAt || remaining <= 0) return null;
+
+  const seconds = (remaining / 1000).toFixed(1);
+  const fraction = Math.min(1, Math.max(0, remaining / 10000));
+
+  const palettes = {
+    swap: {
+      border: "rgba(147,51,234,0.4)",
+      bg: "rgba(147,51,234,0.12)",
+      text: "#e9d5ff",
+      bar: "rgba(147,51,234,0.25)",
+    },
+    opponent: {
+      border: "rgba(59,130,246,0.45)",
+      bg: "rgba(59,130,246,0.12)",
+      text: "#dbeafe",
+      bar: "rgba(59,130,246,0.28)",
+    },
+    self: {
+      border: "rgba(34,197,94,0.45)",
+      bg: "rgba(34,197,94,0.12)",
+      text: "#dcfce7",
+      bar: "rgba(34,197,94,0.28)",
+    },
+  };
+  const { border, bg, text: textColor, bar: barColor } = palettes[variant] || palettes.swap;
+
+  const container = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "2px 6px",
+    borderRadius: 999,
+    border: `1px solid ${border}`,
+    background: bg,
+    color: textColor,
+    marginLeft: 8,
+    position: "relative",
+    overflow: "hidden",
+    fontSize: 12,
+    lineHeight: 1,
+  };
+  const barStyle = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: `${fraction * 100}%`,
+    background: barColor,
+    transition: "width 100ms linear",
+  };
+  const labelStyle = { position: "relative", zIndex: 1, fontWeight: 700 };
+  const timeStyle = { position: "relative", zIndex: 1, opacity: 0.9 };
+
+  return (
+    <span style={container} title="Power time left">
+      <span style={barStyle} />
+      <span style={labelStyle}>{label}</span>
+      <span style={timeStyle}>{seconds}s</span>
+    </span>
+  );
+};
+
 const LookButton = ({ expiresAt, onClick }) => {
   const [progress, setProgress] = useState(1);
 
@@ -180,9 +259,10 @@ function Game () {
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
     const [swapFirstCard, setSwapFirstCard] = useState(null); // { playerId, cardIndex, cardId }
+    const [swapAnimation, setSwapAnimation] = useState(null); // { from, to, start, duration, progress }
     const [players, setPlayers] = useState({
-      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
-      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null, cardRevealExpiresAt: null },
+      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
     });
 
     // Deal 4 cards to each player at game start and put one card in discard pile
@@ -233,6 +313,8 @@ function Game () {
       const swapPowerActive = players[1].activePower === SWAP_ANY || players[2].activePower === SWAP_ANY;
       if (!swapPowerActive) return;
 
+      if (swapAnimation) return; // ignore clicks while animating
+
       if (!swapFirstCard) {
         setSwapFirstCard({ playerId, cardIndex, cardId });
         return;
@@ -244,47 +326,83 @@ function Game () {
         return;
       }
 
-      // ✅ THIS is where it goes (second click does the swap)
-      setPlayers((prev) => {
-        const next = { ...prev };
-
-        const pAId = swapFirstCard.playerId;
-        const pBId = playerId;
-
-        const pA = { ...next[pAId], hand: [...next[pAId].hand] };
-        const pB = { ...next[pBId], hand: [...next[pBId].hand] };
-
-        const cardA = pA.hand[swapFirstCard.cardIndex];
-        const cardB = pB.hand[cardIndex];
-
-        pA.hand[swapFirstCard.cardIndex] = cardB;
-        pB.hand[cardIndex] = cardA;
-
-        next[pAId] = pA;
-        next[pBId] = pB;
-
-        Object.keys(next).forEach((id) => {
-          const pid = Number(id);
-          if (next[pid].activePower === SWAP_ANY) {
-            next[pid] = {
-              ...next[pid],
-              activePower: null,
-              activePowerToken: null,
-              activePowerExpiresAt: null,
-            };
-          }
-        });
-
-        return next;
-      });
-
-      setSwapFirstCard(null);
+      // start short fill animation, then perform swap when complete
+      const duration = 360; // ms
+      const anim = {
+        from: swapFirstCard,
+        to: { playerId, cardIndex, cardId },
+        start: Date.now(),
+        duration,
+        progress: 0,
+        done: false,
+      };
+      setSwapAnimation(anim);
     };
 
 
     const handleResetDeck = () => {
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
     };
+
+    useEffect(() => {
+      if (!swapAnimation) return;
+      const { from, to, start, duration } = swapAnimation;
+      let swapped = false;
+      const id = setInterval(() => {
+        const now = Date.now();
+        const progress = Math.min(1, (now - start) / duration);
+        setSwapAnimation((prev) => (prev ? { ...prev, progress } : prev));
+
+        // perform actual swap at halfway point
+        if (progress >= 0.5 && !swapped) {
+          swapped = true;
+          setPlayers((prev) => {
+            const next = { ...prev };
+
+            const pAId = from.playerId;
+            const pBId = to.playerId;
+
+            const pA = { ...next[pAId], hand: [...next[pAId].hand] };
+            const pB = { ...next[pBId], hand: [...next[pBId].hand] };
+
+            const cardA = pA.hand[from.cardIndex];
+            const cardB = pB.hand[to.cardIndex];
+
+            pA.hand[from.cardIndex] = cardB;
+            pB.hand[to.cardIndex] = cardA;
+
+            next[pAId] = pA;
+            next[pBId] = pB;
+
+            Object.keys(next).forEach((id) => {
+              const pid = Number(id);
+              if (next[pid].activePower === SWAP_ANY) {
+                next[pid] = {
+                  ...next[pid],
+                  activePower: null,
+                  activePowerToken: null,
+                  activePowerExpiresAt: null,
+                  activePowerLabel: null,
+                };
+              }
+            });
+
+            return next;
+          });
+
+          // mark done so second half can animate the poof-in
+          setSwapAnimation((prev) => (prev ? { ...prev, done: true } : prev));
+        }
+
+        if (progress >= 1) {
+          clearInterval(id);
+          setSwapAnimation(null);
+          setSwapFirstCard(null);
+        }
+      }, 40);
+
+      return () => clearInterval(id);
+    }, [swapAnimation]);
 
     const actionButtonStyle = (baseStyle, disabled) => ({
       ...baseStyle,
@@ -406,18 +524,62 @@ function Game () {
             {/* Player hands section */}
             <div style={styles.playersSection}>
               <div style={styles.playerColumn}>
-                <div style={styles.playerLabel}>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</div>
+                <div style={styles.playerLabel}>
+                  <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
+                  {players[1].activePower && players[1].activePowerExpiresAt ? (
+                    <PowerTimeIndicator
+                      expiresAt={players[1].activePowerExpiresAt}
+                      label={
+                        players[1].activePowerLabel ||
+                        (players[1].activePower === SWAP_ANY
+                          ? "Q"
+                          : players[1].activePower === OPPONENT_PEEK
+                          ? "9/10/J"
+                          : "6/7/8")
+                      }
+                      variant={
+                        players[1].activePower === SWAP_ANY
+                          ? "swap"
+                          : players[1].activePower === OPPONENT_PEEK
+                          ? "opponent"
+                          : "self"
+                      }
+                    />
+                  ) : null}
+                </div>
                 <div style={styles.handContainer}>
                   {players[1].hand.length > 0 ? (
                     <div style={players[1].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
                       {players[1].hand.map((card, idx) => {
                         const isCardSelected = swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx;
+                        const cardAnimStyle = (() => {
+                          if (!swapAnimation) return {};
+                          const { from, to, progress } = swapAnimation;
+                          const isFrom = from.playerId === 1 && from.cardIndex === idx;
+                          const isTo = to.playerId === 1 && to.cardIndex === idx;
+                          if (!isFrom && !isTo) return {};
+
+                          const offset = 28; // px to move down
+                          const half = 0.5;
+                          if (progress < half) {
+                            const t = Math.min(1, progress / half);
+                            const translateY = t * offset; // move down
+                            const opacity = 1 - t;
+                            return { transform: `translateY(${translateY}px)`, opacity };
+                          }
+                          // after swap: come up from below into place
+                          const t = Math.min(1, (progress - half) / half);
+                          const translateY = (1 - t) * offset; // from offset -> 0
+                          const opacity = t;
+                          return { transform: `translateY(${translateY}px)`, opacity };
+                        })();
+
                         return (
                         <div key={card.id} style={{
                           ...styles.miniCardWrapper,
                           position: "relative",
                         }}>
-                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {})}}>
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
                               onClick={() => handleStack(1, idx)}
@@ -465,7 +627,7 @@ function Game () {
                               const revealEnds = Date.now() + 4000;
                               setPlayers((prev) => ({
                                 ...prev,
-                                1: { ...prev[1], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, cardRevealExpiresAt: revealEnds },
+                                1: { ...prev[1], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, cardRevealExpiresAt: revealEnds },
                               }));
                               setTimeout(() => {
                                 setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
@@ -489,7 +651,7 @@ function Game () {
                               setPlayers((prev) => ({
                                 ...prev,
                                 1: { ...prev[1], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
-                                2: { ...prev[2], activePower: null, activePowerToken: null, activePowerExpiresAt: null },
+                                2: { ...prev[2], activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null },
                               }));
                               setTimeout(() => {
                                 setPlayers((prev) => ({ 
@@ -518,7 +680,14 @@ function Game () {
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
                             activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
-                            swapProgress={swapFirstCard ? (swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx ? 0.5 : 0) : 0}
+                            swapProgress={(() => {
+                              if (swapAnimation) {
+                                const isFrom = swapAnimation.from.playerId === 1 && swapAnimation.from.cardIndex === idx;
+                                const isTo = swapAnimation.to.playerId === 1 && swapAnimation.to.cardIndex === idx;
+                                return isFrom || isTo ? swapAnimation.progress : 0;
+                              }
+                              return swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
+                            })()}
                             isSelected={swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx}
                             hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 1}
                             onClick={() => handleSwapAnyCard(1, idx, card.id)}
@@ -534,18 +703,62 @@ function Game () {
               </div>
 
               <div style={styles.playerColumn}>
-                <div style={styles.playerLabel}>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</div>
+                <div style={styles.playerLabel}>
+                  <span>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
+                  {players[2].activePower && players[2].activePowerExpiresAt ? (
+                    <PowerTimeIndicator
+                      expiresAt={players[2].activePowerExpiresAt}
+                      label={
+                        players[2].activePowerLabel ||
+                        (players[2].activePower === SWAP_ANY
+                          ? "Q"
+                          : players[2].activePower === OPPONENT_PEEK
+                          ? "9/10/J"
+                          : "6/7/8")
+                      }
+                      variant={
+                        players[2].activePower === SWAP_ANY
+                          ? "swap"
+                          : players[2].activePower === OPPONENT_PEEK
+                          ? "opponent"
+                          : "self"
+                      }
+                    />
+                  ) : null}
+                </div>
                 <div style={styles.handContainer}>
                   {players[2].hand.length > 0 ? (
                     <div style={players[2].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
                       {players[2].hand.map((card, idx) => {
                         const isCardSelected = swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx;
+                        const cardAnimStyle = (() => {
+                          if (!swapAnimation) return {};
+                          const { from, to, progress } = swapAnimation;
+                          const isFrom = from.playerId === 2 && from.cardIndex === idx;
+                          const isTo = to.playerId === 2 && to.cardIndex === idx;
+                          if (!isFrom && !isTo) return {};
+
+                          const offset = 28; // px to move down
+                          const half = 0.5;
+                          if (progress < half) {
+                            const t = Math.min(1, progress / half);
+                            const translateY = t * offset; // move down
+                            const opacity = 1 - t;
+                            return { transform: `translateY(${translateY}px)`, opacity };
+                          }
+                          // after swap: come up from below into place
+                          const t = Math.min(1, (progress - half) / half);
+                          const translateY = (1 - t) * offset; // from offset -> 0
+                          const opacity = t;
+                          return { transform: `translateY(${translateY}px)`, opacity };
+                        })();
+
                         return (
                         <div key={card.id} style={{
                           ...styles.miniCardWrapper,
                           position: "relative",
                         }}>
-                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {})}}>
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
                               onClick={() => handleStack(2, idx)}
@@ -593,7 +806,7 @@ function Game () {
                               const revealEnds = Date.now() + 4000;
                               setPlayers((prev) => ({
                                 ...prev,
-                                2: { ...prev[2], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, cardRevealExpiresAt: revealEnds },
+                                2: { ...prev[2], revealedCardId: card.id, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, cardRevealExpiresAt: revealEnds },
                               }));
                               setTimeout(() => {
                                 setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
@@ -617,7 +830,7 @@ function Game () {
                               setPlayers((prev) => ({
                                 ...prev,
                                 2: { ...prev[2], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
-                                1: { ...prev[1], activePower: null, activePowerToken: null, activePowerExpiresAt: null },
+                                1: { ...prev[1], activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null },
                               }));
                               setTimeout(() => {
                                 setPlayers((prev) => ({ 
@@ -646,7 +859,14 @@ function Game () {
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
                             activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
-                            swapProgress={swapFirstCard ? (swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx ? 0.5 : 0) : 0}
+                            swapProgress={(() => {
+                              if (swapAnimation) {
+                                const isFrom = swapAnimation.from.playerId === 2 && swapAnimation.from.cardIndex === idx;
+                                const isTo = swapAnimation.to.playerId === 2 && swapAnimation.to.cardIndex === idx;
+                                return isFrom || isTo ? swapAnimation.progress : 0;
+                              }
+                              return swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
+                            })()}
                             isSelected={swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx}
                             hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 2}
                             onClick={() => handleSwapAnyCard(2, idx, card.id)}

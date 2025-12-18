@@ -18,8 +18,8 @@ export function dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPla
   setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
   setHasStackedThisRound(false);
   setPlayers({
-    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null },
-    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, revealedCardId: null },
+    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
   });
   setCurrentPlayer(1);
 }
@@ -50,7 +50,7 @@ export function handleDiscardPending({ players, setPlayers, currentPlayer, setDi
     const expiresAt = Date.now() + 10000;
     setPlayers((prev) => ({
       ...prev,
-      [currentPlayer]: { ...prev[currentPlayer], pendingCard: null, activePower: power, activePowerToken: token, activePowerExpiresAt: expiresAt },
+      [currentPlayer]: { ...prev[currentPlayer], pendingCard: null, activePower: power, activePowerToken: token, activePowerExpiresAt: expiresAt, activePowerLabel: pendingCard.rank },
     }));
     // expire the power after 10s, but only if the token still matches
     const playerNum = currentPlayer;
@@ -59,7 +59,7 @@ export function handleDiscardPending({ players, setPlayers, currentPlayer, setDi
         const p = prev[playerNum];
         if (!p) return prev;
         if (p.activePowerToken !== token) return prev;
-        return { ...prev, [playerNum]: { ...p, activePower: null, activePowerToken: null, activePowerExpiresAt: null } };
+        return { ...prev, [playerNum]: { ...p, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null } };
       });
     }, 10000);
   } else {
@@ -176,8 +176,8 @@ export function handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurren
 
   setDeck(fresh);
   setPlayers({
-    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, revealedCardId: null },
-    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, revealedCardId: null },
+    1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+    2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
   });
   setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
   setHasStackedThisRound(false);
