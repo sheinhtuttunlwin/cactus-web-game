@@ -13,6 +13,8 @@ function Game () {
     const [swapFirstCard, setSwapFirstCard] = useState(null); // { playerId, cardIndex, cardId }
     const [swapAnimation, setSwapAnimation] = useState(null); // { from, to, start, duration, progress }
     const [powerUiOpenByPlayer, setPowerUiOpenByPlayer] = useState({ 1: false, 2: false });
+    const [cactusCalledBy, setCactusCalledBy] = useState(null); // null, 1, or 2
+    const [roundOver, setRoundOver] = useState(false);
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -31,6 +33,28 @@ function Game () {
     useEffect(() => {
       setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: false }));
     }, [players[2].activePower, players[2].activePowerExpiresAt]);
+
+    // Clear all active powers when round ends
+    useEffect(() => {
+      if (roundOver) {
+        setPlayers((prev) => ({
+          1: {
+            ...prev[1],
+            activePower: null,
+            activePowerToken: null,
+            activePowerExpiresAt: null,
+            activePowerLabel: null,
+          },
+          2: {
+            ...prev[2],
+            activePower: null,
+            activePowerToken: null,
+            activePowerExpiresAt: null,
+            activePowerLabel: null,
+          },
+        }));
+      }
+    }, [roundOver]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
@@ -52,11 +76,25 @@ function Game () {
     };
 
     const handleDiscardPending = () => {
+      // Check if this player called Cactus before their turn ends
+      const callerFinishingTurn = cactusCalledBy === currentPlayer;
+      
       actions.handleDiscardPending({ players, setPlayers, currentPlayer, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+      
+      // If the player who called Cactus just finished, the next turn will be the final one
+      // If someone else called Cactus and this is not the caller's turn, the round ends
+      if (cactusCalledBy !== null && !callerFinishingTurn) {
+        setRoundOver(true);
+      }
     };
 
     const handleSwapWith = (index) => {
+      const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+      
+      if (cactusCalledBy !== null && !callerFinishingTurn) {
+        setRoundOver(true);
+      }
     };
 
 
@@ -73,7 +111,12 @@ function Game () {
     };
 
     const handleSwapWithDiscard = (index) => {
+      const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+      
+      if (cactusCalledBy !== null && !callerFinishingTurn) {
+        setRoundOver(true);
+      }
     };
 
     const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
@@ -92,6 +135,13 @@ function Game () {
 
     const handleResetDeck = () => {
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
+      setCactusCalledBy(null);
+      setRoundOver(false);
+    };
+
+    const handleCactus = () => {
+      setCactusCalledBy(currentPlayer);
+      // Don't switch turns yet - let the current player finish their turn
     };
 
     useEffect(() => {
@@ -115,7 +165,13 @@ function Game () {
             <header style={styles.header}>
                 <h1 style={styles.title}>Card Test</h1>
                 <p style={styles.subtitle}>2-Player Turn-Based Game</p>
-                <p style={styles.turnIndicator}>Player {currentPlayer}'s Turn</p>
+                {roundOver ? (
+                  <p style={styles.roundOverIndicator}>🌵 Round Over! Player {cactusCalledBy} called Cactus</p>
+                ) : cactusCalledBy ? (
+                  <p style={styles.finalRoundIndicator}>Final Round! Player {currentPlayer}'s last turn</p>
+                ) : (
+                  <p style={styles.turnIndicator}>Player {currentPlayer}'s Turn</p>
+                )}
             </header>
 
             <div style={styles.centerArea}>
@@ -130,6 +186,11 @@ function Game () {
 
                 {/* Current card */}
                 <div style={styles.currentSlot}>
+                {!cactusCalledBy && !roundOver ? (
+                  <button style={styles.cactusButton} onClick={handleCactus} title="Call Cactus to end the round">
+                    🌵 Cactus
+                  </button>
+                ) : null}
                 <div style={styles.currentLabel}>Current Card</div>
 
                 <div style={styles.cardFace}>
@@ -150,11 +211,13 @@ function Game () {
 
                 <div style={styles.controls}>
                     <button
-                      style={actionButtonStyle(styles.button, deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard)}
+                      style={actionButtonStyle(styles.button, deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver)}
                       onClick={handleDraw}
-                      disabled={deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard}
+                      disabled={deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver}
                       title={
-                        players[currentPlayer].swappingWithDiscard
+                        roundOver
+                          ? "Round is over"
+                          : players[currentPlayer].swappingWithDiscard
                           ? "Cancel swap with discard first"
                           : deck.length === 0
                           ? "Deck is empty"
@@ -201,13 +264,13 @@ function Game () {
 
                 {discardPile.length > 0 ? (
                   <button
-                    style={actionButtonStyle(styles.swapDiscardButton, !!players[currentPlayer].pendingCard)}
+                    style={actionButtonStyle(styles.swapDiscardButton, !!players[currentPlayer].pendingCard || roundOver)}
                     onClick={() => setPlayers((prev) => ({
                       ...prev,
                       [currentPlayer]: { ...prev[currentPlayer], swappingWithDiscard: !prev[currentPlayer].swappingWithDiscard }
                     }))}
-                    disabled={!!players[currentPlayer].pendingCard}
-                    title={players[currentPlayer].pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
+                    disabled={!!players[currentPlayer].pendingCard || roundOver}
+                    title={roundOver ? "Round is over" : players[currentPlayer].pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
                   >
                     {players[currentPlayer].swappingWithDiscard ? "Cancel" : "Swap with Discard"}
                   </button>
@@ -301,7 +364,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[1].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
+                                filter: players[1].revealedCardId === card.id || roundOver ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -467,7 +530,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[2].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
+                                filter: players[2].revealedCardId === card.id || roundOver ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -613,6 +676,20 @@ const styles = {
     color: "rgba(34, 197, 94, 0.9)",
   },
 
+  finalRoundIndicator: {
+    margin: 8,
+    fontSize: 16,
+    fontWeight: 700,
+    color: "rgba(251, 191, 36, 0.9)",
+  },
+
+  roundOverIndicator: {
+    margin: 8,
+    fontSize: 18,
+    fontWeight: 700,
+    color: "rgba(239, 68, 68, 0.9)",
+  },
+
   centerArea: {
     flex: 1,
     display: "grid",
@@ -736,6 +813,18 @@ const styles = {
     cursor: "pointer",
     fontWeight: 700,
     opacity: 0.9,
+  },
+
+  cactusButton: {
+    padding: "10px 16px",
+    borderRadius: 12,
+    border: "1px solid rgba(34,197,94,0.3)",
+    background: "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.08))",
+    cursor: "pointer",
+    fontWeight: 700,
+    color: "#dcfce7",
+    fontSize: 14,
+    boxShadow: "0 4px 12px rgba(34,197,94,0.2)",
   },
 
   handContainer: {
