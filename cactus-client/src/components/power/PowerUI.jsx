@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../../game/powers";
 
-export const PowerTimeIndicator = ({ expiresAt, label, variant = "swap" }) => {
+export const PowerTimeIndicator = ({ expiresAt, label, variant = "swap", onClick }) => {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export const PowerTimeIndicator = ({ expiresAt, label, variant = "swap" }) => {
     overflow: "hidden",
     fontSize: 12,
     lineHeight: 1,
+    cursor: onClick ? "pointer" : "default",
   };
   const barStyle = {
     position: "absolute",
@@ -72,7 +73,7 @@ export const PowerTimeIndicator = ({ expiresAt, label, variant = "swap" }) => {
   const timeStyle = { position: "relative", zIndex: 1, opacity: 0.9 };
 
   return (
-    <span style={container} title="Power time left">
+    <span style={container} title="Power time left" onClick={onClick}>
       <span style={barStyle} />
       <span style={labelStyle}>{label}</span>
       <span style={timeStyle}>{seconds}s</span>

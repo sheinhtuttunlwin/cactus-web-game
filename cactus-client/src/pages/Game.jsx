@@ -1,7 +1,7 @@
 import * as actions from "../game/actions";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
-import { PowerTimeIndicator, PowerButton } from "../components/power/PowerUI";
+import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../components/power/PowerUI";
 import * as powerEffects from "../game/powerEffects";
 
 function Game () {
@@ -12,10 +12,25 @@ function Game () {
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
     const [swapFirstCard, setSwapFirstCard] = useState(null); // { playerId, cardIndex, cardId }
     const [swapAnimation, setSwapAnimation] = useState(null); // { from, to, start, duration, progress }
+    const [powerUiOpenByPlayer, setPowerUiOpenByPlayer] = useState({ 1: false, 2: false });
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
     });
+
+    const powerOwnerId = players[1].activePower ? 1 : players[2].activePower ? 2 : null;
+    const powerOwner = powerOwnerId ? players[powerOwnerId] : null;
+    const powerVariant = powerOwner?.activePower === SWAP_ANY ? "swap" : powerOwner?.activePower === OPPONENT_PEEK ? "opponent" : powerOwner?.activePower ? "self" : "swap";
+    const powerLabel = powerOwner?.activePowerLabel || (powerOwner?.activePower === SWAP_ANY ? "Q" : powerOwner?.activePower === OPPONENT_PEEK ? "9/10/J" : powerOwner?.activePower ? "6/7/8" : "");
+
+    // Ensure each player's toggle starts closed when their power changes or expires
+    useEffect(() => {
+      setPowerUiOpenByPlayer((prev) => ({ ...prev, 1: false }));
+    }, [players[1].activePower, players[1].activePowerExpiresAt]);
+
+    useEffect(() => {
+      setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: false }));
+    }, [players[2].activePower, players[2].activePowerExpiresAt]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
@@ -228,6 +243,9 @@ function Game () {
                           ? "opponent"
                           : "self"
                       }
+                      onClick={() =>
+                        setPowerUiOpenByPlayer((prev) => ({ ...prev, 1: !prev[1] }))
+                      }
                     />
                   ) : null}
                 </div>
@@ -263,6 +281,7 @@ function Game () {
                           ...styles.miniCardWrapper,
                           position: "relative",
                         }}>
+                          {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
@@ -299,6 +318,13 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
+                          {players[1].cardRevealExpiresAt && players[1].revealedCardId === card.id ? (
+                            <RevealProgressBar
+                              expiresAt={players[1].cardRevealExpiresAt}
+                              onClick={() => powerEffects.closeCardReveal(1, setPlayers)}
+                            />
+                          ) : null}
+                          {powerUiOpenByPlayer[1] && players[1].activePower === SELF_PEEK ? (
                           <PowerButton
                             power={SELF_PEEK}
                             activePower={players[1].activePower}
@@ -310,6 +336,8 @@ function Game () {
                             onClick={() => powerEffects.activateSelfPeek(1, card.id, setPlayers)}
                             onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
                           />
+                          ) : null}
+                          {powerUiOpenByPlayer[2] && players[2].activePower === OPPONENT_PEEK ? (
                           <PowerButton
                             power={OPPONENT_PEEK}
                             activePower={players[2].activePower}
@@ -322,6 +350,7 @@ function Game () {
                             onClick={() => powerEffects.activateOpponentPeek(1, 2, card.id, setPlayers)}
                             onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
                           />
+                          ) : null}
                           {isCardSelected ? (
                             <button
                               style={styles.cancelSelect}
@@ -331,6 +360,7 @@ function Game () {
                               ×
                             </button>
                           ) : null}
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
                           <PowerButton
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
@@ -347,6 +377,7 @@ function Game () {
                             hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 1}
                             onClick={() => handleSwapAnyCard(1, idx, card.id)}
                           />
+                          ) : null}
                         </div>
                       );
                       })}
@@ -377,6 +408,9 @@ function Game () {
                           : players[2].activePower === OPPONENT_PEEK
                           ? "opponent"
                           : "self"
+                      }
+                      onClick={() =>
+                        setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: !prev[2] }))
                       }
                     />
                   ) : null}
@@ -413,6 +447,7 @@ function Game () {
                           ...styles.miniCardWrapper,
                           position: "relative",
                         }}>
+                          {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
@@ -449,6 +484,13 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
+                          {players[2].cardRevealExpiresAt && players[2].revealedCardId === card.id ? (
+                            <RevealProgressBar
+                              expiresAt={players[2].cardRevealExpiresAt}
+                              onClick={() => powerEffects.closeCardReveal(2, setPlayers)}
+                            />
+                          ) : null}
+                          {powerUiOpenByPlayer[2] && players[2].activePower === SELF_PEEK ? (
                           <PowerButton
                             power={SELF_PEEK}
                             activePower={players[2].activePower}
@@ -460,6 +502,8 @@ function Game () {
                             onClick={() => powerEffects.activateSelfPeek(2, card.id, setPlayers)}
                             onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
                           />
+                          ) : null}
+                          {powerUiOpenByPlayer[1] && players[1].activePower === OPPONENT_PEEK ? (
                           <PowerButton
                             power={OPPONENT_PEEK}
                             activePower={players[1].activePower}
@@ -472,6 +516,7 @@ function Game () {
                             onClick={() => powerEffects.activateOpponentPeek(2, 1, card.id, setPlayers)}
                             onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
                           />
+                          ) : null}
                           {isCardSelected ? (
                             <button
                               style={styles.cancelSelect}
@@ -481,6 +526,7 @@ function Game () {
                               ×
                             </button>
                           ) : null}
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
                           <PowerButton
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
@@ -497,6 +543,7 @@ function Game () {
                             hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 2}
                             onClick={() => handleSwapAnyCard(2, idx, card.id)}
                           />
+                          ) : null}
                         </div>
                       );
                       })}
