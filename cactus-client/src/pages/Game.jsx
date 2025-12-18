@@ -1,40 +1,40 @@
-import { createShuffledDeck } from "../game/deck";
+import * as actions from "../game/actions";
+import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
+import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../components/power/PowerUI";
+import * as powerEffects from "../game/powerEffects";
 
 function Game () {
 
-    const [deck, setDeck] = useState(() => createShuffledDeck());
+    const [deck, setDeck] = useState([]);
     const [discardPile, setDiscardPile] = useState([]);
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
+    const [swapFirstCard, setSwapFirstCard] = useState(null); // { playerId, cardIndex, cardId }
+    const [swapAnimation, setSwapAnimation] = useState(null); // { from, to, start, duration, progress }
+    const [powerUiOpenByPlayer, setPowerUiOpenByPlayer] = useState({ 1: false, 2: false });
     const [players, setPlayers] = useState({
-      1: { hand: [], pendingCard: null, swappingWithDiscard: false },
-      2: { hand: [], pendingCard: null, swappingWithDiscard: false },
+      1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+      2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
     });
+
+    const powerOwnerId = players[1].activePower ? 1 : players[2].activePower ? 2 : null;
+    const powerOwner = powerOwnerId ? players[powerOwnerId] : null;
+    const powerVariant = powerOwner?.activePower === SWAP_ANY ? "swap" : powerOwner?.activePower === OPPONENT_PEEK ? "opponent" : powerOwner?.activePower ? "self" : "swap";
+    const powerLabel = powerOwner?.activePowerLabel || (powerOwner?.activePower === SWAP_ANY ? "Q" : powerOwner?.activePower === OPPONENT_PEEK ? "9/10/J" : powerOwner?.activePower ? "6/7/8" : "");
+
+    // Ensure each player's toggle starts closed when their power changes or expires
+    useEffect(() => {
+      setPowerUiOpenByPlayer((prev) => ({ ...prev, 1: false }));
+    }, [players[1].activePower, players[1].activePowerExpiresAt]);
+
+    useEffect(() => {
+      setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: false }));
+    }, [players[2].activePower, players[2].activePowerExpiresAt]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
-      const fresh = createShuffledDeck();
-
-      const firstDiscardCard = fresh.pop();
-      const player1Hand = [];
-      const player2Hand = [];
-
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player1Hand.push(fresh.pop());
-      }
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player2Hand.push(fresh.pop());
-      }
-
-      setDeck(fresh);
-      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setHasStackedThisRound(false);
-      setPlayers({
-        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
-      });
-      setCurrentPlayer(1);
+      actions.dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound });
     }, []);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
@@ -48,155 +48,66 @@ function Game () {
     }, [players[currentPlayer].pendingCard, currentPlayer]);
 
     const handleDraw = () => {
-      if (deck.length === 0 || players[currentPlayer].pendingCard) return;
-      const newDeck = [...deck];
-      const drawnCard = newDeck.pop();
-      setDeck(newDeck);
-      setPlayers((prev) => ({
-        ...prev,
-        [currentPlayer]: { ...prev[currentPlayer], pendingCard: drawnCard },
-      }));
+      actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
     };
 
     const handleDiscardPending = () => {
-      const pendingCard = players[currentPlayer].pendingCard;
-      if (!pendingCard) return;
-      setDiscardPile((prev) => [...prev, pendingCard]);
-      setHasStackedThisRound(false);
-      setPlayers((prev) => ({
-        ...prev,
-        [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
-      }));
-      setTimeout(switchTurn, 0);
+      actions.handleDiscardPending({ players, setPlayers, currentPlayer, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
 
     const handleSwapWith = (index) => {
-      const pendingCard = players[currentPlayer].pendingCard;
-      if (!pendingCard) return;
-
-      const replaced = players[currentPlayer].hand[index];
-      setPlayers((prev) => {
-        const newHand = [...prev[currentPlayer].hand];
-        newHand[index] = pendingCard;
-        return {
-          ...prev,
-          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, pendingCard: null },
-        };
-      });
-      setDiscardPile((prev) => [...prev, replaced]);
-      setHasStackedThisRound(false);
-      setTimeout(switchTurn, 0);
+      actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
 
 
     const handleStack = (playerNum, index) => {
-      const lastDiscardedCard = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
-      const handCard = players[playerNum].hand[index];
-      
-      if (!lastDiscardedCard) {
-        alert("No card to stack on (discard pile is empty)");
-        return;
-      }
-
-      // Guard: must always have at least 1 card in hand
-      if (players[playerNum].hand.length === 1) {
-        alert("You must keep at least 1 card in your hand");
-        return;
-      }
-
-      // Guard: this card has already been stacked on this round
       if (hasStackedThisRound) {
         alert("This card has already been stacked on. Discard or swap to add a new card.");
         return;
       }
-      
-      if (handCard.rank === lastDiscardedCard.rank) {
-        // ranks match, discard the hand card
-        setPlayers((prev) => ({
-          ...prev,
-          [playerNum]: {
-            ...prev[playerNum],
-            hand: prev[playerNum].hand.filter((_, i) => i !== index),
-          },
-        }));
-        setDiscardPile((prev) => [...prev, handCard]);
-        setHasStackedThisRound(true);
-      } else {
-        // ranks don't match, add 2 cards from deck to hand as penalty
-        alert("does not match");
-        const newDeck = [...deck];
-        const cardsToAdd = [];
-        for (let i = 0; i < 2 && newDeck.length > 0; i++) {
-          cardsToAdd.push(newDeck.pop());
-        }
-        setDeck(newDeck);
-        setPlayers((prev) => ({
-          ...prev,
-          [playerNum]: {
-            ...prev[playerNum],
-            hand: [...prev[playerNum].hand, ...cardsToAdd],
-          },
-        }));
+
+      const result = actions.handleStack({ discardPile, players, setPlayers, playerNum, index, deck, setDeck, setHasStackedThisRound });
+      if (result && result.success) {
+        actions.finalizeStack({ setDiscardPile, handCard: result.card, setHasStackedThisRound });
       }
     };
 
     const handleSwapWithDiscard = (index) => {
-      const lastDiscardedCard = discardPile[discardPile.length - 1];
-      const handCard = players[currentPlayer].hand[index];
-
-      // Swap: hand card goes to discard, discard card goes to hand
-      setPlayers((prev) => {
-        const newHand = [...prev[currentPlayer].hand];
-        newHand[index] = lastDiscardedCard;
-        return {
-          ...prev,
-          [currentPlayer]: { ...prev[currentPlayer], hand: newHand, swappingWithDiscard: false },
-        };
-      });
-
-      setDiscardPile((prev) => {
-        const newPile = [...prev];
-        newPile[newPile.length - 1] = handCard;
-        return newPile;
-      });
-      setHasStackedThisRound(false);
-      setTimeout(switchTurn, 0);
+      actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
     };
+
+    const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
+      powerEffects.handleSwapAnySelection(
+        playerId,
+        cardIndex,
+        cardId,
+        players,
+        swapFirstCard,
+        swapAnimation,
+        setSwapFirstCard,
+        setSwapAnimation
+      );
+    };
+
 
     const handleResetDeck = () => {
-      const fresh = createShuffledDeck();
-
-      const firstDiscardCard = fresh.pop();
-      const player1Hand = [];
-      const player2Hand = [];
-
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player1Hand.push(fresh.pop());
-      }
-      for (let i = 0; i < 4 && fresh.length > 0; i++) {
-        player2Hand.push(fresh.pop());
-      }
-
-      setDeck(fresh);
-      setPlayers({
-        1: { hand: player1Hand, pendingCard: null, swappingWithDiscard: false },
-        2: { hand: player2Hand, pendingCard: null, swappingWithDiscard: false },
-      });
-      setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
-      setHasStackedThisRound(false);
-      setCurrentPlayer(1);
+      actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
     };
+
+    useEffect(() => {
+      return powerEffects.runSwapAnimation(
+        swapAnimation,
+        setSwapAnimation,
+        setPlayers,
+        setSwapFirstCard
+      );
+    }, [swapAnimation]);
 
     const actionButtonStyle = (baseStyle, disabled) => ({
       ...baseStyle,
       opacity: disabled ? 0.5 : 1,
       cursor: disabled ? "not-allowed" : "pointer",
     });
-
-    const switchTurn = () => {
-      setCurrentPlayer((p) => (p === 1 ? 2 : 1));
-    };
-
 
     return (
         <div style={styles.page}>
@@ -312,13 +223,66 @@ function Game () {
             {/* Player hands section */}
             <div style={styles.playersSection}>
               <div style={styles.playerColumn}>
-                <div style={styles.playerLabel}>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</div>
+                <div style={styles.playerLabel}>
+                  <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
+                  {players[1].activePower && players[1].activePowerExpiresAt ? (
+                    <PowerTimeIndicator
+                      expiresAt={players[1].activePowerExpiresAt}
+                      label={
+                        players[1].activePowerLabel ||
+                        (players[1].activePower === SWAP_ANY
+                          ? "Q"
+                          : players[1].activePower === OPPONENT_PEEK
+                          ? "9/10/J"
+                          : "6/7/8")
+                      }
+                      variant={
+                        players[1].activePower === SWAP_ANY
+                          ? "swap"
+                          : players[1].activePower === OPPONENT_PEEK
+                          ? "opponent"
+                          : "self"
+                      }
+                      onClick={() =>
+                        setPowerUiOpenByPlayer((prev) => ({ ...prev, 1: !prev[1] }))
+                      }
+                    />
+                  ) : null}
+                </div>
                 <div style={styles.handContainer}>
                   {players[1].hand.length > 0 ? (
                     <div style={players[1].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
-                      {players[1].hand.map((card, idx) => (
-                        <div key={card.id} style={styles.miniCardWrapper}>
-                          <div style={styles.miniCard}>
+                      {players[1].hand.map((card, idx) => {
+                        const isCardSelected = swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx;
+                        const cardAnimStyle = (() => {
+                          if (!swapAnimation) return {};
+                          const { from, to, progress } = swapAnimation;
+                          const isFrom = from.playerId === 1 && from.cardIndex === idx;
+                          const isTo = to.playerId === 1 && to.cardIndex === idx;
+                          if (!isFrom && !isTo) return {};
+
+                          const offset = 28; // px to move down
+                          const half = 0.5;
+                          if (progress < half) {
+                            const t = Math.min(1, progress / half);
+                            const translateY = t * offset; // move down
+                            const opacity = 1 - t;
+                            return { transform: `translateY(${translateY}px)`, opacity };
+                          }
+                          // after swap: come up from below into place
+                          const t = Math.min(1, (progress - half) / half);
+                          const translateY = (1 - t) * offset; // from offset -> 0
+                          const opacity = t;
+                          return { transform: `translateY(${translateY}px)`, opacity };
+                        })();
+
+                        return (
+                        <div key={card.id} style={{
+                          ...styles.miniCardWrapper,
+                          position: "relative",
+                        }}>
+                          {/* Timer is shown next to player label; no minicard timer overlay */}
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
                               onClick={() => handleStack(1, idx)}
@@ -337,6 +301,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
+                                filter: players[1].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -353,8 +318,69 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
+                          {players[1].cardRevealExpiresAt && players[1].revealedCardId === card.id ? (
+                            <RevealProgressBar
+                              expiresAt={players[1].cardRevealExpiresAt}
+                              onClick={() => powerEffects.closeCardReveal(1, setPlayers)}
+                            />
+                          ) : null}
+                          {powerUiOpenByPlayer[1] && players[1].activePower === SELF_PEEK ? (
+                          <PowerButton
+                            power={SELF_PEEK}
+                            activePower={players[1].activePower}
+                            activePowerToken={players[1].activePowerToken}
+                            activePowerExpiresAt={players[1].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[1].cardRevealExpiresAt}
+                            revealedCardId={players[1].revealedCardId}
+                            cardId={card.id}
+                            onClick={() => powerEffects.activateSelfPeek(1, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
+                          />
+                          ) : null}
+                          {powerUiOpenByPlayer[2] && players[2].activePower === OPPONENT_PEEK ? (
+                          <PowerButton
+                            power={OPPONENT_PEEK}
+                            activePower={players[2].activePower}
+                            activePowerToken={players[2].activePowerToken}
+                            activePowerExpiresAt={players[2].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[1].cardRevealExpiresAt}
+                            revealedCardId={players[1].revealedCardId}
+                            cardId={card.id}
+                            showClose={false}
+                            onClick={() => powerEffects.activateOpponentPeek(1, 2, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
+                          />
+                          ) : null}
+                          {isCardSelected ? (
+                            <button
+                              style={styles.cancelSelect}
+                              onClick={() => setSwapFirstCard(null)}
+                              title="Cancel selection"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
+                          <PowerButton
+                            power={SWAP_ANY}
+                            activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
+                            activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
+                            swapProgress={(() => {
+                              if (swapAnimation) {
+                                const isFrom = swapAnimation.from.playerId === 1 && swapAnimation.from.cardIndex === idx;
+                                const isTo = swapAnimation.to.playerId === 1 && swapAnimation.to.cardIndex === idx;
+                                return isFrom || isTo ? swapAnimation.progress : 0;
+                              }
+                              return swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
+                            })()}
+                            isSelected={swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx}
+                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 1}
+                            onClick={() => handleSwapAnyCard(1, idx, card.id)}
+                          />
+                          ) : null}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   ) : (
                     <div style={styles.cardPlaceholder}>No cards in hand</div>
@@ -363,13 +389,66 @@ function Game () {
               </div>
 
               <div style={styles.playerColumn}>
-                <div style={styles.playerLabel}>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</div>
+                <div style={styles.playerLabel}>
+                  <span>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
+                  {players[2].activePower && players[2].activePowerExpiresAt ? (
+                    <PowerTimeIndicator
+                      expiresAt={players[2].activePowerExpiresAt}
+                      label={
+                        players[2].activePowerLabel ||
+                        (players[2].activePower === SWAP_ANY
+                          ? "Q"
+                          : players[2].activePower === OPPONENT_PEEK
+                          ? "9/10/J"
+                          : "6/7/8")
+                      }
+                      variant={
+                        players[2].activePower === SWAP_ANY
+                          ? "swap"
+                          : players[2].activePower === OPPONENT_PEEK
+                          ? "opponent"
+                          : "self"
+                      }
+                      onClick={() =>
+                        setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: !prev[2] }))
+                      }
+                    />
+                  ) : null}
+                </div>
                 <div style={styles.handContainer}>
                   {players[2].hand.length > 0 ? (
                     <div style={players[2].hand.length < 4 ? styles.miniHandFlex : styles.miniHand}>
-                      {players[2].hand.map((card, idx) => (
-                        <div key={card.id} style={styles.miniCardWrapper}>
-                          <div style={styles.miniCard}>
+                      {players[2].hand.map((card, idx) => {
+                        const isCardSelected = swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx;
+                        const cardAnimStyle = (() => {
+                          if (!swapAnimation) return {};
+                          const { from, to, progress } = swapAnimation;
+                          const isFrom = from.playerId === 2 && from.cardIndex === idx;
+                          const isTo = to.playerId === 2 && to.cardIndex === idx;
+                          if (!isFrom && !isTo) return {};
+
+                          const offset = 28; // px to move down
+                          const half = 0.5;
+                          if (progress < half) {
+                            const t = Math.min(1, progress / half);
+                            const translateY = t * offset; // move down
+                            const opacity = 1 - t;
+                            return { transform: `translateY(${translateY}px)`, opacity };
+                          }
+                          // after swap: come up from below into place
+                          const t = Math.min(1, (progress - half) / half);
+                          const translateY = (1 - t) * offset; // from offset -> 0
+                          const opacity = t;
+                          return { transform: `translateY(${translateY}px)`, opacity };
+                        })();
+
+                        return (
+                        <div key={card.id} style={{
+                          ...styles.miniCardWrapper,
+                          position: "relative",
+                        }}>
+                          {/* Timer is shown next to player label; no minicard timer overlay */}
+                          <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
                               onClick={() => handleStack(2, idx)}
@@ -388,6 +467,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
+                                filter: players[2].revealedCardId === card.id ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -404,8 +484,69 @@ function Game () {
                               Swap with Discard
                             </button>
                           ) : null}
+                          {players[2].cardRevealExpiresAt && players[2].revealedCardId === card.id ? (
+                            <RevealProgressBar
+                              expiresAt={players[2].cardRevealExpiresAt}
+                              onClick={() => powerEffects.closeCardReveal(2, setPlayers)}
+                            />
+                          ) : null}
+                          {powerUiOpenByPlayer[2] && players[2].activePower === SELF_PEEK ? (
+                          <PowerButton
+                            power={SELF_PEEK}
+                            activePower={players[2].activePower}
+                            activePowerToken={players[2].activePowerToken}
+                            activePowerExpiresAt={players[2].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[2].cardRevealExpiresAt}
+                            revealedCardId={players[2].revealedCardId}
+                            cardId={card.id}
+                            onClick={() => powerEffects.activateSelfPeek(2, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
+                          />
+                          ) : null}
+                          {powerUiOpenByPlayer[1] && players[1].activePower === OPPONENT_PEEK ? (
+                          <PowerButton
+                            power={OPPONENT_PEEK}
+                            activePower={players[1].activePower}
+                            activePowerToken={players[1].activePowerToken}
+                            activePowerExpiresAt={players[1].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[2].cardRevealExpiresAt}
+                            revealedCardId={players[2].revealedCardId}
+                            cardId={card.id}
+                            showClose={false}
+                            onClick={() => powerEffects.activateOpponentPeek(2, 1, card.id, setPlayers)}
+                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
+                          />
+                          ) : null}
+                          {isCardSelected ? (
+                            <button
+                              style={styles.cancelSelect}
+                              onClick={() => setSwapFirstCard(null)}
+                              title="Cancel selection"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
+                          <PowerButton
+                            power={SWAP_ANY}
+                            activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
+                            activePowerToken={players[1].activePower === SWAP_ANY ? players[1].activePowerToken : players[2].activePower === SWAP_ANY ? players[2].activePowerToken : null}
+                            swapProgress={(() => {
+                              if (swapAnimation) {
+                                const isFrom = swapAnimation.from.playerId === 2 && swapAnimation.from.cardIndex === idx;
+                                const isTo = swapAnimation.to.playerId === 2 && swapAnimation.to.cardIndex === idx;
+                                return isFrom || isTo ? swapAnimation.progress : 0;
+                              }
+                              return swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
+                            })()}
+                            isSelected={swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx}
+                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 2}
+                            onClick={() => handleSwapAnyCard(2, idx, card.id)}
+                          />
+                          ) : null}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   ) : (
                     <div style={styles.cardPlaceholder}>No cards in hand</div>
@@ -629,6 +770,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+    transition: "transform 180ms ease, box-shadow 180ms ease, filter 180ms ease",
     position: "relative",
   },
 
@@ -644,6 +786,30 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
+  },
+
+  cancelSelect: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    background: "rgba(0,0,0,0.6)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontWeight: 800,
+    boxShadow: "0 8px 20px rgba(255,165,0,0.14)",
+  },
+
+  selectedMiniCard: {
+    transform: "translateY(-8px)",
+    boxShadow: "0 20px 48px rgba(255,165,0,0.14), 0 8px 28px rgba(0,0,0,0.45)",
+    filter: "drop-shadow(0 6px 18px rgba(255,165,0,0.18))",
   },
 
   stackButton: {
