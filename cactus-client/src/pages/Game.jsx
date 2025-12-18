@@ -1,5 +1,5 @@
 import * as actions from "../game/actions";
-import { SELF_PEEK } from "../game/powers";
+import { SELF_PEEK, OPPONENT_PEEK } from "../game/powers";
 import { useState, useEffect } from "react";
 
 const LookButton = ({ expiresAt, onClick }) => {
@@ -110,7 +110,7 @@ const RevealProgressBar = ({ expiresAt, onClick }) => {
   );
 };
 
-const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, onClick, onClose, buttonLabel = "Look" }) => {
+const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, buttonLabel = "Look" }) => {
   if (activePower === power && activePowerToken) {
     return (
       <LookButton
@@ -119,7 +119,7 @@ const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresA
       />
     );
   }
-  if (cardRevealExpiresAt) {
+  if (showClose && cardRevealExpiresAt && revealedCardId === cardId) {
     return <RevealProgressBar expiresAt={cardRevealExpiresAt} onClick={onClose} />;
   }
   return null;
@@ -352,6 +352,8 @@ function Game () {
                             activePowerToken={players[1].activePowerToken}
                             activePowerExpiresAt={players[1].activePowerExpiresAt}
                             cardRevealExpiresAt={players[1].cardRevealExpiresAt}
+                            revealedCardId={players[1].revealedCardId}
+                            cardId={card.id}
                             onClick={() => {
                               const revealEnds = Date.now() + 4000;
                               setPlayers((prev) => ({
@@ -364,6 +366,36 @@ function Game () {
                             }}
                             onClose={() => {
                               setPlayers((prev) => ({ ...prev, 1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null } }));
+                            }}
+                          />
+                          <PowerButton
+                            power={OPPONENT_PEEK}
+                            activePower={players[2].activePower}
+                            activePowerToken={players[2].activePowerToken}
+                            activePowerExpiresAt={players[2].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[1].cardRevealExpiresAt}
+                            revealedCardId={players[1].revealedCardId}
+                            cardId={card.id}
+                            showClose={false}
+                            onClick={() => {
+                              const revealEnds = Date.now() + 4000;
+                              setPlayers((prev) => ({
+                                ...prev,
+                                1: { ...prev[1], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
+                                2: { ...prev[2], activePower: null, activePowerToken: null, activePowerExpiresAt: null },
+                              }));
+                              setTimeout(() => {
+                                setPlayers((prev) => ({ 
+                                  ...prev, 
+                                  1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null }
+                                }));
+                              }, 4000);
+                            }}
+                            onClose={() => {
+                              setPlayers((prev) => ({ 
+                                ...prev, 
+                                1: { ...prev[1], revealedCardId: null, cardRevealExpiresAt: null }
+                              }));
                             }}
                           />
                         </div>
@@ -424,6 +456,8 @@ function Game () {
                             activePowerToken={players[2].activePowerToken}
                             activePowerExpiresAt={players[2].activePowerExpiresAt}
                             cardRevealExpiresAt={players[2].cardRevealExpiresAt}
+                            revealedCardId={players[2].revealedCardId}
+                            cardId={card.id}
                             onClick={() => {
                               const revealEnds = Date.now() + 4000;
                               setPlayers((prev) => ({
@@ -436,6 +470,36 @@ function Game () {
                             }}
                             onClose={() => {
                               setPlayers((prev) => ({ ...prev, 2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null } }));
+                            }}
+                          />
+                          <PowerButton
+                            power={OPPONENT_PEEK}
+                            activePower={players[1].activePower}
+                            activePowerToken={players[1].activePowerToken}
+                            activePowerExpiresAt={players[1].activePowerExpiresAt}
+                            cardRevealExpiresAt={players[2].cardRevealExpiresAt}
+                            revealedCardId={players[2].revealedCardId}
+                            cardId={card.id}
+                            showClose={false}
+                            onClick={() => {
+                              const revealEnds = Date.now() + 4000;
+                              setPlayers((prev) => ({
+                                ...prev,
+                                2: { ...prev[2], revealedCardId: card.id, cardRevealExpiresAt: revealEnds },
+                                1: { ...prev[1], activePower: null, activePowerToken: null, activePowerExpiresAt: null },
+                              }));
+                              setTimeout(() => {
+                                setPlayers((prev) => ({ 
+                                  ...prev, 
+                                  2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null }
+                                }));
+                              }, 4000);
+                            }}
+                            onClose={() => {
+                              setPlayers((prev) => ({ 
+                                ...prev, 
+                                2: { ...prev[2], revealedCardId: null, cardRevealExpiresAt: null }
+                              }));
                             }}
                           />
                         </div>
