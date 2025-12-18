@@ -43,7 +43,7 @@ export function handleDiscardPending({ players, setPlayers, currentPlayer, setDi
     ...prev,
     [currentPlayer]: { ...prev[currentPlayer], pendingCard: null },
   }));
-  setTimeout(() => setCurrentPlayer((p) => (p === 1 ? 2 : 1)), 0);
+  setCurrentPlayer((p) => (p === 1 ? 2 : 1));
 }
 
 export function handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer }) {
@@ -61,7 +61,7 @@ export function handleSwapWith({ players, setPlayers, currentPlayer, index, setD
   });
   setDiscardPile((prev) => [...prev, replaced]);
   setHasStackedThisRound(false);
-  setTimeout(() => setCurrentPlayer((p) => (p === 1 ? 2 : 1)), 0);
+  setCurrentPlayer((p) => (p === 1 ? 2 : 1));
 }
 
 export function handleStack({ discardPile, players, setPlayers, playerNum, index, deck, setDeck, setHasStackedThisRound }) {
@@ -133,7 +133,7 @@ export function handleSwapWithDiscard({ discardPile, players, setPlayers, curren
     return newPile;
   });
   setHasStackedThisRound(false);
-  setTimeout(() => setCurrentPlayer((p) => (p === 1 ? 2 : 1)), 0);
+  setCurrentPlayer((p) => (p === 1 ? 2 : 1));
 }
 
 export function handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound }) {
@@ -159,6 +159,3 @@ export function handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurren
   setCurrentPlayer(1);
 }
 
-export function switchTurn(setCurrentPlayer) {
-  setCurrentPlayer((p) => (p === 1 ? 2 : 1));
-}

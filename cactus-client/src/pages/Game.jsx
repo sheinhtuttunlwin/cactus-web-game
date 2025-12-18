@@ -1,10 +1,9 @@
-import { createShuffledDeck } from "../game/deck";
 import * as actions from "../game/actions";
 import { useState, useEffect } from "react";
 
 function Game () {
 
-    const [deck, setDeck] = useState(() => createShuffledDeck());
+    const [deck, setDeck] = useState([]);
     const [discardPile, setDiscardPile] = useState([]);
     const [hasStackedThisRound, setHasStackedThisRound] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(1); // 1 or 2
@@ -66,11 +65,6 @@ function Game () {
       opacity: disabled ? 0.5 : 1,
       cursor: disabled ? "not-allowed" : "pointer",
     });
-
-    const switchTurn = () => {
-      actions.switchTurn(setCurrentPlayer);
-    };
-
 
     return (
         <div style={styles.page}>
