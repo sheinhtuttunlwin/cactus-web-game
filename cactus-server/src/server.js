@@ -79,6 +79,10 @@ function isAnimating(room) {
   return !!room.round?.swapAnimation;
 }
 
+function finalOrAnimating(round) {
+  return round.roundOver || round.finalStackExpired || !!round.swapAnimation;
+}
+
 function endTurn(room) {
   room.round.currentPlayer = room.round.currentPlayer === 1 ? 2 : 1;
 }
@@ -250,8 +254,9 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on('swap_with_hand', ({ roomId, index }) => {
-    console.log('[SERVER] swap_with_hand:', socket.id, roomId, index);
+  socket.on('swap_with_hand', ({ roomId, cardIndex }) => {
+    console.log('[SERVER] swap_with_hand:', socket.id, roomId, cardIndex);
+    const index = cardIndex;
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid || room.round.currentPlayer !== pid) return;
@@ -275,7 +280,9 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on('swap_with_discard', ({ roomId, index }) => {
+  socket.on('swap_with_discard', ({ roomId, cardIndex }) => {
+    console.log('[SERVER] swap_with_discard:', socket.id, roomId, cardIndex);
+    const index = cardIndex;
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid || room.round.currentPlayer !== pid) return;
@@ -299,10 +306,12 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on('stack', ({ roomId, index }) => {
+  socket.on('stack', ({ roomId, cardIndex }) => {
+    console.log('[SERVER] stack:', socket.id, roomId, cardIndex);
+    const index = cardIndex;
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
-    if (!pid || room.round.currentPlayer !== pid) return;
+    if (!pid) return;
     const r = room.round;
     if (r.discardPile.length === 0) return;
     const hand = r.players[pid].hand;

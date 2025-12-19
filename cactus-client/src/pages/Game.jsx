@@ -572,6 +572,7 @@ function Game ({
                         }}>
                           {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
+                            {(!isOnline || myPlayerId === 1) ? (
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard || finalStackExpired)}
                               onClick={() => handleStack(1, idx)}
@@ -588,6 +589,7 @@ function Game ({
                             >
                               Stack
                             </button>
+                            ) : null}
                             <div
                               style={{
                                 ...styles.miniCardText,
@@ -740,6 +742,7 @@ function Game ({
                         }}>
                           {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
+                            {(!isOnline || myPlayerId === 2) ? (
                             <button
                               style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard || finalStackExpired)}
                               onClick={() => handleStack(2, idx)}
@@ -756,6 +759,7 @@ function Game ({
                             >
                               Stack
                             </button>
+                            ) : null}
                             <div
                               style={{
                                 ...styles.miniCardText,
