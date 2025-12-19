@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import NavBar from './components/NavBar';
-import Game from './pages/Game';
+import Match from './pages/Match';
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       <NavBar />  {/* Global Navigation Bar*/}
       <Routes>
         <Route path='/' element={<Home />} /> 
-        <Route path='/game' element={<Game />} /> 
+        <Route path='/game' element={<Match />} /> 
       </Routes>
     </BrowserRouter>
   );
