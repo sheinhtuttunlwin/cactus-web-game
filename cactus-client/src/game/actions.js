@@ -1,4 +1,4 @@
-import { createShuffledDeck } from "./deck";
+import { createShuffledDeck, shuffleDeck } from "./deck";
 import { getPowerForCard } from "./powers";
 
 export function dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound }) {
@@ -182,5 +182,31 @@ export function handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurren
   setDiscardPile(firstDiscardCard ? [firstDiscardCard] : []);
   setHasStackedThisRound(false);
   setCurrentPlayer(1);
+}
+
+/**
+ * Recycle the discard pile back into the deck while preserving the top discard.
+ * Leaves player hands untouched.
+ */
+export function recycleDiscardIntoDeck({ discardPile, setDeck, setDiscardPile }) {
+  if (!discardPile || discardPile.length === 0) return;
+
+  // If there is only one card in discard, move it to the deck.
+  if (discardPile.length === 1) {
+    const single = discardPile[0];
+    setDeck((prev) => [...prev, single]);
+    setDiscardPile([]);
+    return;
+  }
+
+  // If there are multiple, preserve the top discard and shuffle the rest back.
+  const top = discardPile[discardPile.length - 1];
+  const rest = discardPile.slice(0, -1);
+  const shuffled = shuffleDeck(rest);
+
+  // New deck will be shuffled cards (placed on top)
+  setDeck((prev) => [...prev, ...shuffled]);
+  // discard pile now only contains the top card
+  setDiscardPile([top]);
 }
 

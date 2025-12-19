@@ -175,6 +175,14 @@ function Game ({
       setFinalStackExpired(false);
     };
 
+    const handleRefillFromDiscard = () => {
+      if (!discardPile || discardPile.length === 0) {
+        alert("No cards in discard to reset deck.");
+        return;
+      }
+      actions.recycleDiscardIntoDeck({ discardPile, setDeck, setDiscardPile });
+    };
+
     const handleCactus = () => {
       setCactusCalledBy(currentPlayer);
       // Don't switch turns yet - let the current player finish their turn
@@ -246,6 +254,11 @@ function Game ({
             <div style={styles.centerArea}>
                 {/* Deck pile */}
                 <div style={styles.pile}>
+                {deck.length === 0 && discardPile && discardPile.length > 0 && Object.values(players).every(p => !p.pendingCard) ? (
+                  <button style={styles.reshuffleTopButton} onClick={handleRefillFromDiscard} title="Reset deck from discard">
+                    Reset Deck
+                  </button>
+                ) : null}
                 <div style={styles.cardBack} />
                 <div style={styles.pileLabel}>
                     <div style={styles.pileName}>Deck</div>
@@ -297,6 +310,8 @@ function Game ({
                     >
                       Draw
                     </button>
+
+                    
 
                     <button style={styles.buttonSecondary} onClick={handleResetDeck}>
                       {finalStackExpired && onRoundComplete 
@@ -949,6 +964,18 @@ const styles = {
     cursor: "pointer",
     fontWeight: 700,
     opacity: 0.9,
+  },
+
+  reshuffleTopButton: {
+    marginBottom: 8,
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.03)",
+    color: "rgba(255,255,255,0.95)",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: 12,
   },
 
   cactusButton: {
