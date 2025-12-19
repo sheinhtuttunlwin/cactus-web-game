@@ -158,7 +158,7 @@ function Game ({
         setHasStackedThisRound(round.hasStackedThisRound || false);
         setSwapFirstCard(round.swapFirstCard || null);
         setSwapAnimation(round.swapAnimation || null);
-        setPowerUiOpenByPlayer(round.powerUiOpenByPlayer || { 1: false, 2: false });
+        // Don't sync powerUiOpenByPlayer - keep it client-side only
         setCactusCalledBy(round.cactusCalledBy || null);
         setRoundOver(round.roundOver || false);
         setFinalStackExpiresAt(round.finalStackExpiresAt || null);
@@ -274,16 +274,20 @@ function Game ({
 
     const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
       if (finalStackExpired || isAnimating) return;
-      powerEffects.handleSwapAnySelection(
-        playerId,
-        cardIndex,
-        cardId,
-        players,
-        swapFirstCard,
-        swapAnimation,
-        setSwapFirstCard,
-        setSwapAnimation
-      );
+      if (isOnline) {
+        net.swapAnySelect({ roomId, playerId, cardIndex, cardId });
+      } else {
+        powerEffects.handleSwapAnySelection(
+          playerId,
+          cardIndex,
+          cardId,
+          players,
+          swapFirstCard,
+          swapAnimation,
+          setSwapFirstCard,
+          setSwapAnimation
+        );
+      }
     };
 
 
@@ -697,7 +701,6 @@ function Game ({
                               return swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
                             })()}
                             isSelected={swapFirstCard && swapFirstCard.playerId === 1 && swapFirstCard.cardIndex === idx}
-                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 1}
                             onClick={() => handleSwapAnyCard(1, idx, card.id)}
                           />
                           ) : null}
@@ -897,7 +900,6 @@ function Game ({
                               return swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx ? 0.5 : 0;
                             })()}
                             isSelected={swapFirstCard && swapFirstCard.playerId === 2 && swapFirstCard.cardIndex === idx}
-                            hideIfOwnerSelected={swapFirstCard && swapFirstCard.playerId === 2}
                             onClick={() => handleSwapAnyCard(2, idx, card.id)}
                           />
                           ) : null}

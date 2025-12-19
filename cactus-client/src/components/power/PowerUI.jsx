@@ -227,8 +227,7 @@ export const SwapProgressBar = ({ progress, onClick, isSelected }) => {
   );
 };
 
-export const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, swapProgress, isSelected, hideIfOwnerSelected = false, buttonLabel = "Look" }) => {
-  if (power === SWAP_ANY && hideIfOwnerSelected) return null;
+export const PowerButton = ({ power, activePower, activePowerToken, activePowerExpiresAt, cardRevealExpiresAt, revealedCardId, cardId, onClick, onClose, showClose = true, swapProgress, isSelected, buttonLabel = "Look" }) => {
   if (activePower === power && activePowerToken) {
     if (power === SWAP_ANY) {
       return (

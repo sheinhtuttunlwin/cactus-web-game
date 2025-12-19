@@ -34,8 +34,8 @@ function makeInitialRoundState() {
   const discardPile = [];
   const take = (n) => deck.splice(0, n);
   const players = {
-    1: { hand: take(4), pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
-    2: { hand: take(4), pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+    1: { hand: take(4), pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerCardId: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
+    2: { hand: take(4), pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerCardId: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
   };
   discardPile.push(take(1)[0]);
   return {
@@ -46,7 +46,6 @@ function makeInitialRoundState() {
     hasStackedThisRound: false,
     swapFirstCard: null,
     swapAnimation: null,
-    powerUiOpenByPlayer: { 1: false, 2: false },
     cactusCalledBy: null,
     roundOver: false,
     finalStackExpiresAt: null,
@@ -57,20 +56,20 @@ function makeInitialRoundState() {
 function filterStateFor(room, playerId) {
   const round = room.round;
   if (!round) return null;
-  const maskHand = (hand, revealedCardId) => hand.map(c => {
-    // If this card is revealed, send full data; otherwise mask it
-    if (c.id === revealedCardId) {
+  const maskHand = (hand, revealedCardId, revealedBy, viewingPlayerId) => hand.map(c => {
+    // If this card is revealed AND the viewing player is the one who revealed it, send full data
+    if (c.id === revealedCardId && revealedBy === viewingPlayerId) {
       return { ...c };
     }
     return { id: c.id, color: c.color, suit: undefined, rank: undefined };
   });
   const filtered = JSON.parse(JSON.stringify(round));
-  // Player sees their own hand fully, opponent's hand masked except revealed cards
+  // Player sees their own hand fully, opponent's hand masked except revealed cards they revealed
   if (playerId === 1) {
     filtered.players[1] = round.players[1];
-    filtered.players[2] = { ...round.players[2], hand: maskHand(round.players[2].hand, round.players[2].revealedCardId) };
+    filtered.players[2] = { ...round.players[2], hand: maskHand(round.players[2].hand, round.players[2].revealedCardId, round.players[2].revealedBy, playerId) };
   } else {
-    filtered.players[1] = { ...round.players[1], hand: maskHand(round.players[1].hand, round.players[1].revealedCardId) };
+    filtered.players[1] = { ...round.players[1], hand: maskHand(round.players[1].hand, round.players[1].revealedCardId, round.players[1].revealedBy, playerId) };
     filtered.players[2] = round.players[2];
   }
   return filtered;
@@ -140,6 +139,7 @@ function safeSwap(room, from, to) {
     if (pl.activePower === POWER.SWAP_ANY) {
       pl.activePower = null;
       pl.activePowerToken = null;
+      pl.activePowerCardId = null;
       pl.activePowerExpiresAt = null;
       pl.activePowerLabel = null;
     }
@@ -244,13 +244,13 @@ io.on('connection', (socket) => {
     if (power) {
       const token = `${Date.now()}-${Math.random()}`;
       const expiresAt = Date.now() + 10000;
-      Object.assign(r.players[pid], { pendingCard: null, activePower: power, activePowerToken: token, activePowerExpiresAt: expiresAt, activePowerLabel: pending.rank });
+      Object.assign(r.players[pid], { pendingCard: null, activePower: power, activePowerToken: token, activePowerCardId: pending.id, activePowerExpiresAt: expiresAt, activePowerLabel: pending.rank });
       // schedule expiry
       setTimeout(() => {
         const pl = room.round?.players?.[pid];
         if (!pl) return;
         if (pl.activePowerToken !== token) return;
-        Object.assign(pl, { activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null });
+        Object.assign(pl, { activePower: null, activePowerToken: null, activePowerCardId: null, activePowerExpiresAt: null, activePowerLabel: null });
         broadcastRoom(room);
       }, 10000);
     } else {
