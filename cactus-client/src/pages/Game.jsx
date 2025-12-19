@@ -10,7 +10,8 @@ function Game ({
   currentRound = 1,
   totalRounds = 1,
   totalScores = {},
-  onRoundComplete = null
+  onRoundComplete = null,
+  onExitToSetup = null,
 }) {
 
     const [deck, setDeck] = useState([]);
@@ -196,6 +197,18 @@ function Game ({
 
     return (
         <div style={styles.page}>
+            {onExitToSetup ? (
+              <button
+                style={styles.topLeftButton}
+                onClick={() => {
+                  if (window.confirm("Return to setup? This will abandon the current match.")) {
+                    onExitToSetup();
+                  }
+                }}
+              >
+                ← Setup
+              </button>
+            ) : null}
             <div style={styles.table}>
             <header style={styles.header}>
                 <h1 style={styles.title}>Card Test</h1>
@@ -697,6 +710,7 @@ const styles = {
     padding: 24,
     background:
       "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.06), transparent 35%), radial-gradient(circle at 70% 70%, rgba(255,255,255,0.06), transparent 40%), #0b1220",
+    position: "relative",
   },
 
   table: {
@@ -729,6 +743,32 @@ const styles = {
     margin: 0,
     opacity: 0.75,
     fontSize: 14,
+  },
+
+  returnButton: {
+    alignSelf: "flex-end",
+    padding: "6px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.06)",
+    background: "rgba(255,255,255,0.02)",
+    color: "rgba(255,255,255,0.9)",
+    cursor: "pointer",
+  },
+  topLeftButton: {
+    position: "absolute",
+    top: 18,
+    left: 18,
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.06)",
+    background: "rgba(255,255,255,0.02)",
+    color: "rgba(255,255,255,0.9)",
+    cursor: "pointer",
+    zIndex: 60,
   },
 
   matchInfo: {

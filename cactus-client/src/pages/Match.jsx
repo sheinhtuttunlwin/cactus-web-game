@@ -96,6 +96,7 @@ function Match() {
       totalRounds={matchSettings.numberOfRounds}
       totalScores={totalScores}
       onRoundComplete={handleRoundComplete}
+      onExitToSetup={handleRestart}
     />
   );
 }
