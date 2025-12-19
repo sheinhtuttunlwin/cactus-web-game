@@ -5,7 +5,13 @@ import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../component
 import { calculateHandScore } from "../game/scoring";
 import * as powerEffects from "../game/powerEffects";
 
-function Game () {
+function Game ({ 
+  numberOfPlayers = 2,
+  currentRound = 1,
+  totalRounds = 1,
+  totalScores = {},
+  onRoundComplete = null
+}) {
 
     const [deck, setDeck] = useState([]);
     const [discardPile, setDiscardPile] = useState([]);
@@ -149,6 +155,18 @@ function Game () {
 
 
     const handleResetDeck = () => {
+      // If this is part of a match, report scores and let Match controller handle progression
+      if (onRoundComplete) {
+        const roundScores = {
+          1: player1Score,
+          2: player2Score,
+        };
+        onRoundComplete(roundScores);
+        // Don't reset here - Match component will handle round progression
+        return;
+      }
+      
+      // Standalone mode: reset for another round
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
       setCactusCalledBy(null);
       setRoundOver(false);
@@ -182,6 +200,14 @@ function Game () {
             <header style={styles.header}>
                 <h1 style={styles.title}>Card Test</h1>
                 <p style={styles.subtitle}>2-Player Turn-Based Game</p>
+                {totalRounds > 1 ? (
+                  <p style={styles.matchInfo}>
+                    Round {currentRound} of {totalRounds} | 
+                    {Object.keys(totalScores).length > 0 && (
+                      <span> Total: P1: {totalScores[1] || 0} pts | P2: {totalScores[2] || 0} pts</span>
+                    )}
+                  </p>
+                ) : null}
                 {roundOver ? (
                   <p style={styles.roundOverIndicator}>🌵 Round Over! Player {cactusCalledBy} called Cactus</p>
                 ) : cactusCalledBy ? (
@@ -260,7 +286,9 @@ function Game () {
                     </button>
 
                     <button style={styles.buttonSecondary} onClick={handleResetDeck}>
-                    Reset
+                      {finalStackExpired && onRoundComplete 
+                        ? (currentRound >= totalRounds ? "Finish Match" : "Next Round")
+                        : "Reset"}
                     </button>
 
                     {players[currentPlayer].pendingCard ? (
@@ -701,6 +729,13 @@ const styles = {
     margin: 0,
     opacity: 0.75,
     fontSize: 14,
+  },
+
+  matchInfo: {
+    margin: "4px 0",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "rgba(147, 197, 253, 0.9)",
   },
 
   turnIndicator: {
