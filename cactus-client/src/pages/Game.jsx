@@ -25,6 +25,7 @@ function Game ({
     const [roundOver, setRoundOver] = useState(false);
     const [finalStackExpiresAt, setFinalStackExpiresAt] = useState(null);
     const [finalStackExpired, setFinalStackExpired] = useState(false);
+    const [roundReported, setRoundReported] = useState(false);
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -78,6 +79,24 @@ function Game ({
         if (timerId) clearInterval(timerId);
       };
     }, [finalStackExpiresAt]);
+
+    // Report round scores up once, after final stack window closes
+    useEffect(() => {
+      if (!finalStackExpired || roundReported) return;
+      const p1 = calculateHandScore(players[1].hand);
+      const p2 = calculateHandScore(players[2].hand);
+      const scores = { 1: p1, 2: p2 };
+      // Strict winner gets 0; on tie, no zeroing applied
+      if (p1 < p2) {
+        scores[1] = 0;
+      } else if (p2 < p1) {
+        scores[2] = 0;
+      }
+      if (typeof onRoundComplete === "function") {
+        onRoundComplete(scores);
+      }
+      setRoundReported(true);
+    }, [finalStackExpired, roundReported, players, onRoundComplete]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
