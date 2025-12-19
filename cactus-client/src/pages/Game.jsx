@@ -421,28 +421,36 @@ function Game ({
 
                 <div style={styles.cardFace}>
                   {players[currentPlayer].pendingCard ? (
-                  <div
-                    style={{
-                    ...styles.cardText,
-                    color: players[currentPlayer].pendingCard.color === "red" ? "crimson" : "white",
-                    }}
-                  >
-                    {players[currentPlayer].pendingCard.rank}
-                    {players[currentPlayer].pendingCard.suit}
-                  </div>
+                    isOnline && myPlayerId !== currentPlayer ? (
+                      <div style={styles.cardPlaceholder}>Player {currentPlayer}'s Turn</div>
+                    ) : (
+                      <div
+                        style={{
+                        ...styles.cardText,
+                        color: players[currentPlayer].pendingCard.color === "red" ? "crimson" : "white",
+                        }}
+                      >
+                        {players[currentPlayer].pendingCard.rank}
+                        {players[currentPlayer].pendingCard.suit}
+                      </div>
+                    )
                   ) : (
-                  <div style={styles.cardPlaceholder}>Draw to reveal</div>
+                  <div style={styles.cardPlaceholder}>
+                    {isOnline && myPlayerId !== currentPlayer ? `Player ${currentPlayer}'s Turn` : "Draw to reveal"}
+                  </div>
                   )}
                 </div>
 
                 <div style={styles.controls}>
                     <button
-                      style={actionButtonStyle(styles.button, deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver)}
+                      style={actionButtonStyle(styles.button, deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver || (isOnline && myPlayerId !== currentPlayer))}
                       onClick={handleDraw}
-                      disabled={deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver}
+                      disabled={deck.length === 0 || !!players[currentPlayer].pendingCard || players[currentPlayer].swappingWithDiscard || roundOver || (isOnline && myPlayerId !== currentPlayer)}
                       title={
                         roundOver
                           ? "Round is over"
+                          : (isOnline && myPlayerId !== currentPlayer)
+                          ? "Not your turn"
                           : players[currentPlayer].swappingWithDiscard
                           ? "Cancel swap with discard first"
                           : deck.length === 0
@@ -463,7 +471,7 @@ function Game ({
                         : "Reset"}
                     </button>
 
-                    {players[currentPlayer].pendingCard ? (
+                    {players[currentPlayer].pendingCard && (!isOnline || myPlayerId === currentPlayer) ? (
                       <button style={styles.button} onClick={handleDiscardPending} title="Discard drawn card">
                         Discard
                       </button>
@@ -494,13 +502,13 @@ function Game ({
 
                 {discardPile.length > 0 ? (
                   <button
-                    style={actionButtonStyle(styles.swapDiscardButton, !!players[currentPlayer].pendingCard || roundOver)}
+                    style={actionButtonStyle(styles.swapDiscardButton, !!players[currentPlayer].pendingCard || roundOver || (isOnline && myPlayerId !== currentPlayer))}
                     onClick={() => setPlayers((prev) => ({
                       ...prev,
                       [currentPlayer]: { ...prev[currentPlayer], swappingWithDiscard: !prev[currentPlayer].swappingWithDiscard }
                     }))}
-                    disabled={!!players[currentPlayer].pendingCard || roundOver}
-                    title={roundOver ? "Round is over" : players[currentPlayer].pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
+                    disabled={!!players[currentPlayer].pendingCard || roundOver || (isOnline && myPlayerId !== currentPlayer)}
+                    title={roundOver ? "Round is over" : (isOnline && myPlayerId !== currentPlayer) ? "Not your turn" : players[currentPlayer].pendingCard ? "Resolve drawn card first" : "Swap a hand card with the top discard card"}
                   >
                     {players[currentPlayer].swappingWithDiscard ? "Cancel" : "Swap with Discard"}
                   </button>
@@ -605,12 +613,12 @@ function Game ({
                               {card.suit}
                             </div>
                           </div>
-                          {currentPlayer === 1 && players[1].pendingCard ? (
+                          {currentPlayer === 1 && players[1].pendingCard && (!isOnline || myPlayerId === 1) ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
                               Swap
                             </button>
                           ) : null}
-                          {currentPlayer === 1 && players[1].swappingWithDiscard ? (
+                          {currentPlayer === 1 && players[1].swappingWithDiscard && (!isOnline || myPlayerId === 1) ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
                               Swap with Discard
                             </button>
@@ -804,12 +812,12 @@ function Game ({
                               {card.suit}
                             </div>
                           </div>
-                          {currentPlayer === 2 && players[2].pendingCard ? (
+                          {currentPlayer === 2 && players[2].pendingCard && (!isOnline || myPlayerId === 2) ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWith(idx)}>
                               Swap
                             </button>
                           ) : null}
-                          {currentPlayer === 2 && players[2].swappingWithDiscard ? (
+                          {currentPlayer === 2 && players[2].swappingWithDiscard && (!isOnline || myPlayerId === 2) ? (
                             <button style={styles.swapSmall} onClick={() => handleSwapWithDiscard(idx)}>
                               Swap with Discard
                             </button>
