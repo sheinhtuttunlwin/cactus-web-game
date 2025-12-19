@@ -25,6 +25,7 @@ function Game ({
     const [roundOver, setRoundOver] = useState(false);
     const [finalStackExpiresAt, setFinalStackExpiresAt] = useState(null);
     const [finalStackExpired, setFinalStackExpired] = useState(false);
+    const [roundReported, setRoundReported] = useState(false);
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -36,6 +37,7 @@ function Game ({
     const powerLabel = powerOwner?.activePowerLabel || (powerOwner?.activePower === SWAP_ANY ? "Q" : powerOwner?.activePower === OPPONENT_PEEK ? "9/10/J" : powerOwner?.activePower ? "6/7/8" : "");
     const player1Score = finalStackExpired ? calculateHandScore(players[1].hand) : null;
     const player2Score = finalStackExpired ? calculateHandScore(players[2].hand) : null;
+    const isAnimating = !!swapAnimation;
     const winningPlayer = finalStackExpired
       ? player1Score < player2Score
         ? 1
@@ -78,6 +80,24 @@ function Game ({
       };
     }, [finalStackExpiresAt]);
 
+    // Report round scores up once, after final stack window closes
+    useEffect(() => {
+      if (!finalStackExpired || roundReported) return;
+      const p1 = calculateHandScore(players[1].hand);
+      const p2 = calculateHandScore(players[2].hand);
+      const scores = { 1: p1, 2: p2 };
+      // Strict winner gets 0; on tie, no zeroing applied
+      if (p1 < p2) {
+        scores[1] = 0;
+      } else if (p2 < p1) {
+        scores[2] = 0;
+      }
+      if (typeof onRoundComplete === "function") {
+        onRoundComplete(scores);
+      }
+      setRoundReported(true);
+    }, [finalStackExpired, roundReported, players, onRoundComplete]);
+
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
       actions.dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound });
@@ -94,10 +114,15 @@ function Game ({
     }, [players[currentPlayer].pendingCard, currentPlayer]);
 
     const handleDraw = () => {
+      if (roundOver || finalStackExpired || isAnimating) return;
+      if (deck.length === 0) return;
+      if (players[currentPlayer].pendingCard) return;
+      if (players[currentPlayer].swappingWithDiscard) return;
       actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
     };
 
     const handleDiscardPending = () => {
+      if (isAnimating) return;
       // Check if this player called Cactus before their turn ends
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       
@@ -111,6 +136,7 @@ function Game ({
     };
 
     const handleSwapWith = (index) => {
+      if (finalStackExpired || isAnimating) return;
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
@@ -121,6 +147,9 @@ function Game ({
 
 
     const handleStack = (playerNum, index) => {
+      if (finalStackExpired || isAnimating) return;
+      if (players[playerNum].pendingCard) return;
+      if (players[playerNum].swappingWithDiscard) return;
       if (hasStackedThisRound) {
         alert("This card has already been stacked on. Discard or swap to add a new card.");
         return;
@@ -133,6 +162,7 @@ function Game ({
     };
 
     const handleSwapWithDiscard = (index) => {
+      if (finalStackExpired || isAnimating) return;
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
@@ -142,6 +172,7 @@ function Game ({
     };
 
     const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
+      if (finalStackExpired || isAnimating) return;
       powerEffects.handleSwapAnySelection(
         playerId,
         cardIndex,
