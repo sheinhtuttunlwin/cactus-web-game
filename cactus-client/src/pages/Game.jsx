@@ -532,9 +532,9 @@ function Game ({
                           ? "opponent"
                           : "self"
                       }
-                      onClick={() =>
+                      onClick={(!isOnline || myPlayerId === 1) ? () =>
                         setPowerUiOpenByPlayer((prev) => ({ ...prev, 1: !prev[1] }))
-                      }
+                      : undefined}
                     />
                   ) : null}
                 </div>
@@ -702,9 +702,9 @@ function Game ({
                           ? "opponent"
                           : "self"
                       }
-                      onClick={() =>
+                      onClick={(!isOnline || myPlayerId === 2) ? () =>
                         setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: !prev[2] }))
-                      }
+                      : undefined}
                     />
                   ) : null}
                 </div>
