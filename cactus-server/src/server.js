@@ -57,10 +57,22 @@ function makeInitialRoundState() {
 function filterStateFor(room, playerId) {
   const round = room.round;
   if (!round) return null;
-  const maskHand = (hand) => hand.map(c => ({ id: c.id, color: c.color, suit: undefined, rank: undefined }));
+  const maskHand = (hand, revealedCardId) => hand.map(c => {
+    // If this card is revealed, send full data; otherwise mask it
+    if (c.id === revealedCardId) {
+      return { ...c };
+    }
+    return { id: c.id, color: c.color, suit: undefined, rank: undefined };
+  });
   const filtered = JSON.parse(JSON.stringify(round));
-  filtered.players[1] = (playerId === 1) ? round.players[1] : { ...round.players[1], hand: maskHand(round.players[1].hand) };
-  filtered.players[2] = (playerId === 2) ? round.players[2] : { ...round.players[2], hand: maskHand(round.players[2].hand) };
+  // Player sees their own hand fully, opponent's hand masked except revealed cards
+  if (playerId === 1) {
+    filtered.players[1] = round.players[1];
+    filtered.players[2] = { ...round.players[2], hand: maskHand(round.players[2].hand, round.players[2].revealedCardId) };
+  } else {
+    filtered.players[1] = { ...round.players[1], hand: maskHand(round.players[1].hand, round.players[1].revealedCardId) };
+    filtered.players[2] = round.players[2];
+  }
   return filtered;
 }
 
@@ -346,6 +358,7 @@ io.on('connection', (socket) => {
     if (type === POWER.SELF_PEEK) {
       if (activator.activePower !== POWER.SELF_PEEK || !activator.activePowerToken || !activator.activePowerExpiresAt || Date.now() >= activator.activePowerExpiresAt) return;
       activator.revealedCardId = cardId;
+      activator.revealedBy = pid;
       activator.cardRevealExpiresAt = Date.now() + 4000;
       // consume power
       activator.activePower = null;
@@ -356,6 +369,7 @@ io.on('connection', (socket) => {
         const pl = room.round?.players?.[pid];
         if (!pl) return;
         pl.revealedCardId = null;
+        pl.revealedBy = null;
         pl.cardRevealExpiresAt = null;
         broadcastRoom(room);
       }, 4000);
@@ -364,6 +378,7 @@ io.on('connection', (socket) => {
       const target = r.players[targetPlayerId];
       if (!target) return;
       target.revealedCardId = cardId;
+      target.revealedBy = pid;
       target.cardRevealExpiresAt = Date.now() + 4000;
       activator.activePower = null;
       activator.activePowerToken = null;
@@ -373,6 +388,7 @@ io.on('connection', (socket) => {
         const t = room.round?.players?.[targetPlayerId];
         if (!t) return;
         t.revealedCardId = null;
+        t.revealedBy = null;
         t.cardRevealExpiresAt = null;
         broadcastRoom(room);
       }, 4000);

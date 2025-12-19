@@ -594,7 +594,7 @@ function Game ({
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[1].revealedCardId === card.id || finalStackExpired ? "none" : styles.miniCardText.filter,
+                                filter: (players[1].revealedCardId === card.id && players[1].revealedBy === myPlayerId) || finalStackExpired ? "none" : "blur(3px)",
                               }}
                             >
                               {card.rank}
@@ -611,10 +611,16 @@ function Game ({
                               Swap with Discard
                             </button>
                           ) : null}
-                          {players[1].cardRevealExpiresAt && players[1].revealedCardId === card.id ? (
+                          {players[1].cardRevealExpiresAt && players[1].revealedCardId === card.id && players[1].revealedBy === myPlayerId ? (
                             <RevealProgressBar
                               expiresAt={players[1].cardRevealExpiresAt}
-                              onClick={() => powerEffects.closeCardReveal(1, setPlayers)}
+                              onClick={() => {
+                                if (isOnline) {
+                                  net.closeReveal({ roomId, playerId: 1 });
+                                } else {
+                                  powerEffects.closeCardReveal(1, setPlayers);
+                                }
+                              }}
                             />
                           ) : null}
                           {powerUiOpenByPlayer[1] && players[1].activePower === SELF_PEEK && !finalStackExpired ? (
@@ -626,8 +632,20 @@ function Game ({
                             cardRevealExpiresAt={players[1].cardRevealExpiresAt}
                             revealedCardId={players[1].revealedCardId}
                             cardId={card.id}
-                            onClick={() => powerEffects.activateSelfPeek(1, card.id, setPlayers)}
-                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
+                            onClick={() => {
+                              if (isOnline) {
+                                net.activatePower({ roomId, type: SELF_PEEK, cardId: card.id });
+                              } else {
+                                powerEffects.activateSelfPeek(1, card.id, setPlayers);
+                              }
+                            }}
+                            onClose={() => {
+                              if (isOnline) {
+                                net.closeReveal({ roomId, playerId: 1 });
+                              } else {
+                                powerEffects.closeCardReveal(1, setPlayers);
+                              }
+                            }}
                           />
                           ) : null}
                           {powerUiOpenByPlayer[2] && players[2].activePower === OPPONENT_PEEK && !finalStackExpired ? (
@@ -640,8 +658,20 @@ function Game ({
                             revealedCardId={players[1].revealedCardId}
                             cardId={card.id}
                             showClose={false}
-                            onClick={() => powerEffects.activateOpponentPeek(1, 2, card.id, setPlayers)}
-                            onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
+                            onClick={() => {
+                              if (isOnline) {
+                                net.activatePower({ roomId, type: OPPONENT_PEEK, targetPlayerId: 1, cardId: card.id });
+                              } else {
+                                powerEffects.activateOpponentPeek(1, 2, card.id, setPlayers);
+                              }
+                            }}
+                            onClose={() => {
+                              if (isOnline) {
+                                net.closeReveal({ roomId, playerId: 1 });
+                              } else {
+                                powerEffects.closeCardReveal(1, setPlayers);
+                              }
+                            }}
                           />
                           ) : null}
                           {isCardSelected ? (
@@ -764,7 +794,7 @@ function Game ({
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[2].revealedCardId === card.id || finalStackExpired ? "none" : styles.miniCardText.filter,
+                                filter: (players[2].revealedCardId === card.id && players[2].revealedBy === myPlayerId) || finalStackExpired ? "none" : "blur(3px)",
                               }}
                             >
                               {card.rank}
@@ -781,10 +811,16 @@ function Game ({
                               Swap with Discard
                             </button>
                           ) : null}
-                          {players[2].cardRevealExpiresAt && players[2].revealedCardId === card.id ? (
+                          {players[2].cardRevealExpiresAt && players[2].revealedCardId === card.id && players[2].revealedBy === myPlayerId ? (
                             <RevealProgressBar
                               expiresAt={players[2].cardRevealExpiresAt}
-                              onClick={() => powerEffects.closeCardReveal(2, setPlayers)}
+                              onClick={() => {
+                                if (isOnline) {
+                                  net.closeReveal({ roomId, playerId: 2 });
+                                } else {
+                                  powerEffects.closeCardReveal(2, setPlayers);
+                                }
+                              }}
                             />
                           ) : null}
                           {powerUiOpenByPlayer[2] && players[2].activePower === SELF_PEEK && !finalStackExpired ? (
@@ -796,8 +832,20 @@ function Game ({
                             cardRevealExpiresAt={players[2].cardRevealExpiresAt}
                             revealedCardId={players[2].revealedCardId}
                             cardId={card.id}
-                            onClick={() => powerEffects.activateSelfPeek(2, card.id, setPlayers)}
-                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
+                            onClick={() => {
+                              if (isOnline) {
+                                net.activatePower({ roomId, type: SELF_PEEK, cardId: card.id });
+                              } else {
+                                powerEffects.activateSelfPeek(2, card.id, setPlayers);
+                              }
+                            }}
+                            onClose={() => {
+                              if (isOnline) {
+                                net.closeReveal({ roomId, playerId: 2 });
+                              } else {
+                                powerEffects.closeCardReveal(2, setPlayers);
+                              }
+                            }}
                           />
                           ) : null}
                           {powerUiOpenByPlayer[1] && players[1].activePower === OPPONENT_PEEK && !finalStackExpired ? (
@@ -810,8 +858,20 @@ function Game ({
                             revealedCardId={players[2].revealedCardId}
                             cardId={card.id}
                             showClose={false}
-                            onClick={() => powerEffects.activateOpponentPeek(2, 1, card.id, setPlayers)}
-                            onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
+                            onClick={() => {
+                              if (isOnline) {
+                                net.activatePower({ roomId, type: OPPONENT_PEEK, targetPlayerId: 2, cardId: card.id });
+                              } else {
+                                powerEffects.activateOpponentPeek(2, 1, card.id, setPlayers);
+                              }
+                            }}
+                            onClose={() => {
+                              if (isOnline) {
+                                net.closeReveal({ roomId, playerId: 2 });
+                              } else {
+                                powerEffects.closeCardReveal(2, setPlayers);
+                              }
+                            }}
                           />
                           ) : null}
                           {isCardSelected ? (
