@@ -32,6 +32,11 @@ function Game ({
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
     });
 
+    // Online multiplayer state
+    const [isOnline, setIsOnline] = useState(false);
+    const [myPlayerId, setMyPlayerId] = useState(null);
+    const [roomId, setRoomId] = useState(null);
+
     const powerOwnerId = players[1].activePower ? 1 : players[2].activePower ? 2 : null;
     const powerOwner = powerOwnerId ? players[powerOwnerId] : null;
     const powerVariant = powerOwner?.activePower === SWAP_ANY ? "swap" : powerOwner?.activePower === OPPONENT_PEEK ? "opponent" : powerOwner?.activePower ? "self" : "swap";
@@ -99,32 +104,80 @@ function Game ({
       setRoundReported(true);
     }, [finalStackExpired, roundReported, players, onRoundComplete]);
 
-    // Deal 4 cards to each player at game start and put one card in discard pile
+    // Offline-only: deal locally. Online mode relies on server state.
     useEffect(() => {
+      if (import.meta.env.VITE_USE_SOCKET === "true") return;
       actions.dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound });
     }, []);
 
     // Thin Socket.IO connector for dev exercises (no UI changes)
     useEffect(() => {
       // eslint-disable-next-line no-console
+      console.log('[GAME] Component mounted');
+      // eslint-disable-next-line no-console
       console.log('[NET] VITE_USE_SOCKET =', import.meta.env.VITE_USE_SOCKET);
+      // eslint-disable-next-line no-console
+      console.log('[NET] VITE_SERVER_URL =', import.meta.env.VITE_SERVER_URL);
       
       // Expose connector for debugging regardless of env flag
       if (typeof window !== 'undefined') {
         window.cactusNet = net;
+        // eslint-disable-next-line no-console
+        console.log('[NET] cactusNet exposed to window');
       }
       
       if (import.meta.env.VITE_USE_SOCKET !== "true") return;
       
       net.connect();
       const params = new URLSearchParams(window.location.search);
-      const roomId = params.get("room") || "dev-room";
+      const room = params.get("room") || "dev-room";
       const playerName = params.get("name") || "Player";
-      net.joinRoom(roomId, playerName);
-      net.onAny((event, ...args) => {
+      
+      setRoomId(room);
+      setIsOnline(true);
+      
+      // Listen for room assignment
+      const handleRoomUpdate = ({ roomId: assignedRoom, playerId }) => {
         // eslint-disable-next-line no-console
-        console.log("[NET]", event, ...args);
-      });
+        console.log('[NET] Assigned to room', assignedRoom, 'as player', playerId);
+        setMyPlayerId(playerId);
+      };
+      
+      // Listen for game state updates from server
+      const handleRoundUpdate = ({ phase, round, match }) => {
+        // eslint-disable-next-line no-console
+        console.log('[NET] round_update', { phase, round, match });
+        
+        if (!round) return;
+        
+        // Sync server state to local state
+        setDeck(round.deck || []);
+        setDiscardPile(round.discardPile || []);
+        setPlayers(round.players || {});
+        setCurrentPlayer(round.currentPlayer || 1);
+        setHasStackedThisRound(round.hasStackedThisRound || false);
+        setSwapFirstCard(round.swapFirstCard || null);
+        setSwapAnimation(round.swapAnimation || null);
+        setPowerUiOpenByPlayer(round.powerUiOpenByPlayer || { 1: false, 2: false });
+        setCactusCalledBy(round.cactusCalledBy || null);
+        setRoundOver(round.roundOver || false);
+        setFinalStackExpiresAt(round.finalStackExpiresAt || null);
+        setFinalStackExpired(round.finalStackExpired || false);
+      };
+      
+      net.on('room_update', handleRoomUpdate);
+      net.on('round_update', handleRoundUpdate);
+      
+      const handleConnect = () => {
+        net.joinRoom(room, playerName);
+      };
+      net.on('connect', handleConnect);
+      
+      return () => {
+        net.off('room_update', handleRoomUpdate);
+        net.off('round_update', handleRoundUpdate);
+        net.off('connect', handleConnect);
+      };
     }, []);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
@@ -142,30 +195,45 @@ function Game ({
       if (deck.length === 0) return;
       if (players[currentPlayer].pendingCard) return;
       if (players[currentPlayer].swappingWithDiscard) return;
-      actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
+      
+      if (isOnline) {
+        net.drawCard({ roomId });
+      } else {
+        actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
+      }
     };
 
     const handleDiscardPending = () => {
       if (isAnimating) return;
-      // Check if this player called Cactus before their turn ends
-      const callerFinishingTurn = cactusCalledBy === currentPlayer;
       
-      actions.handleDiscardPending({ players, setPlayers, currentPlayer, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
-      
-      // If the player who called Cactus just finished, the next turn will be the final one
-      // If someone else called Cactus and this is not the caller's turn, the round ends
-      if (cactusCalledBy !== null && !callerFinishingTurn) {
-        setRoundOver(true);
+      if (isOnline) {
+        net.discardPending({ roomId });
+      } else {
+        // Check if this player called Cactus before their turn ends
+        const callerFinishingTurn = cactusCalledBy === currentPlayer;
+        
+        actions.handleDiscardPending({ players, setPlayers, currentPlayer, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+        
+        // If the player who called Cactus just finished, the next turn will be the final one
+        // If someone else called Cactus and this is not the caller's turn, the round ends
+        if (cactusCalledBy !== null && !callerFinishingTurn) {
+          setRoundOver(true);
+        }
       }
     };
 
     const handleSwapWith = (index) => {
       if (finalStackExpired || isAnimating) return;
-      const callerFinishingTurn = cactusCalledBy === currentPlayer;
-      actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
-      if (cactusCalledBy !== null && !callerFinishingTurn) {
-        setRoundOver(true);
+      if (isOnline) {
+        net.swapWithHand({ roomId, cardIndex: index });
+      } else {
+        const callerFinishingTurn = cactusCalledBy === currentPlayer;
+        actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+        
+        if (cactusCalledBy !== null && !callerFinishingTurn) {
+          setRoundOver(true);
+        }
       }
     };
 
@@ -179,19 +247,28 @@ function Game ({
         return;
       }
 
-      const result = actions.handleStack({ discardPile, players, setPlayers, playerNum, index, deck, setDeck, setHasStackedThisRound });
-      if (result && result.success) {
-        actions.finalizeStack({ setDiscardPile, handCard: result.card, setHasStackedThisRound });
+      if (isOnline) {
+        net.stack({ roomId, playerId: playerNum, cardIndex: index });
+      } else {
+        const result = actions.handleStack({ discardPile, players, setPlayers, playerNum, index, deck, setDeck, setHasStackedThisRound });
+        if (result && result.success) {
+          actions.finalizeStack({ setDiscardPile, handCard: result.card, setHasStackedThisRound });
+        }
       }
     };
 
     const handleSwapWithDiscard = (index) => {
       if (finalStackExpired || isAnimating) return;
-      const callerFinishingTurn = cactusCalledBy === currentPlayer;
-      actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
-      if (cactusCalledBy !== null && !callerFinishingTurn) {
-        setRoundOver(true);
+      if (isOnline) {
+        net.swapWithDiscard({ roomId, cardIndex: index });
+      } else {
+        const callerFinishingTurn = cactusCalledBy === currentPlayer;
+        actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
+        
+        if (cactusCalledBy !== null && !callerFinishingTurn) {
+          setRoundOver(true);
+        }
       }
     };
 
@@ -222,12 +299,16 @@ function Game ({
         return;
       }
       
-      // Reset the current round (standalone or mid-round reset)
-      actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
-      setCactusCalledBy(null);
-      setRoundOver(false);
-      setFinalStackExpiresAt(null);
-      setFinalStackExpired(false);
+      if (isOnline) {
+        net.resetRound({ roomId });
+      } else {
+        // Reset the current round (standalone or mid-round reset)
+        actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
+        setCactusCalledBy(null);
+        setRoundOver(false);
+        setFinalStackExpiresAt(null);
+        setFinalStackExpired(false);
+      }
     };
 
     const handleRefillFromDiscard = () => {
@@ -239,8 +320,12 @@ function Game ({
     };
 
     const handleCactus = () => {
-      setCactusCalledBy(currentPlayer);
-      // Don't switch turns yet - let the current player finish their turn
+      if (isOnline) {
+        net.callCactus({ roomId });
+      } else {
+        setCactusCalledBy(currentPlayer);
+        // Don't switch turns yet - let the current player finish their turn
+      }
     };
 
     useEffect(() => {

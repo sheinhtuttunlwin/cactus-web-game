@@ -5,7 +5,11 @@ import { createShuffledDeck } from './game/deck.js';
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET','POST'] }
+  cors: {
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 
 const rooms = new RoomManager();
@@ -162,11 +166,16 @@ io.on('connection', (socket) => {
     else { socket.emit('error', { message: 'Room full' }); return; }
     room.players[socket.id] = { playerId: assigned };
     socket.join(roomId);
+    if (!room.round) {
+      room.round = makeInitialRoundState();
+      room.phase = 'playing';
+    }
     socket.emit('room_update', { roomId, playerId: assigned });
     broadcastRoom(room);
   });
 
   socket.on('start_match', ({ roomId, numberOfRounds }) => {
+    console.log('[SERVER] start_match:', socket.id, roomId, numberOfRounds);
     const room = rooms.ensure(roomId);
     if (!room.players[socket.id]) return;
     room.matchSettings = { numberOfRounds, numberOfPlayers: 2 };
@@ -178,6 +187,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('deal_initial', ({ roomId }) => {
+    console.log('[SERVER] deal_initial:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     if (!room.players[socket.id]) return;
     room.round = makeInitialRoundState();
@@ -187,6 +197,7 @@ io.on('connection', (socket) => {
 
   // --- Turn actions ---
   socket.on('draw_card', ({ roomId }) => {
+    console.log('[SERVER] draw_card:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid || room.round.currentPlayer !== pid) return;
@@ -202,6 +213,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('discard_pending', ({ roomId }) => {
+    console.log('[SERVER] discard_pending:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid || room.round.currentPlayer !== pid) return;
@@ -239,6 +251,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('swap_with_hand', ({ roomId, index }) => {
+    console.log('[SERVER] swap_with_hand:', socket.id, roomId, index);
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid || room.round.currentPlayer !== pid) return;
@@ -398,6 +411,7 @@ io.on('connection', (socket) => {
 
   // Cactus / round end
   socket.on('call_cactus', ({ roomId }) => {
+    console.log('[SERVER] call_cactus:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     const pid = getPlayerId(room, socket.id);
     if (!pid) return;
@@ -408,6 +422,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('reset_round', ({ roomId }) => {
+    console.log('[SERVER] reset_round:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     if (!room.players[socket.id]) return;
     room.round = makeInitialRoundState();
@@ -416,14 +431,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    // remove from rooms and end room
+    // remove player socket mapping but keep room state so reconnects don't reset deck
     for (const [roomId, room] of rooms.rooms) {
       if (room.players[socket.id]) {
         delete room.players[socket.id];
         const pid = room.socketsByPlayer[1] === socket.id ? 1 : room.socketsByPlayer[2] === socket.id ? 2 : null;
         if (pid) room.socketsByPlayer[pid] = null;
-        // dissolve room for simplicity
-        rooms.delete(roomId);
+        // keep room data intact; do not delete room
       }
     }
   });

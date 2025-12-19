@@ -11,7 +11,7 @@ class SocketConnector {
     if (this._socket && this._connected) return this._socket;
     if (!this._socket) {
       this._socket = io(this.url, {
-        transports: ['websocket'],
+        // allow default transport fallback (polling -> websocket)
         autoConnect: false,
         withCredentials: true,
       });
