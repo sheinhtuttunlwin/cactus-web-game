@@ -155,8 +155,8 @@ function Game ({
 
 
     const handleResetDeck = () => {
-      // If this is part of a match, report scores and let Match controller handle progression
-      if (onRoundComplete) {
+      // If this is part of a match AND round is complete (scores visible), advance to next round
+      if (onRoundComplete && finalStackExpired) {
         const roundScores = {
           1: player1Score,
           2: player2Score,
@@ -166,7 +166,7 @@ function Game ({
         return;
       }
       
-      // Standalone mode: reset for another round
+      // Reset the current round (standalone or mid-round reset)
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
       setCactusCalledBy(null);
       setRoundOver(false);
