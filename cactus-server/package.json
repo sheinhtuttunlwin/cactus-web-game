@@ -1,0 +1,13 @@
+{
+  "name": "cactus-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5"
+  }
+}

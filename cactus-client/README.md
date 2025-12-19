@@ -1,16 +1,48 @@
-# React + Vite
+# Cactus Client (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the Vite + React client for the cactus card game.
 
-Currently, two official plugins are available:
+## Scripts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `npm run dev`: start the Vite dev server
+- `npm run build`: build the production bundle
+- `npm run preview`: preview the production build
 
-## React Compiler
+## Socket.IO (Thin Client Connector)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+A minimal Socket.IO client is available to exercise the server events without changing the UI. It is gated by an environment flag.
 
-## Expanding the ESLint configuration
+### Enable connector
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Run the client with env variables:
+
+```
+VITE_USE_SOCKET=true VITE_SERVER_URL=http://localhost:5050 npm run dev
+```
+
+Optional query params control the room and player name:
+
+- `?room=<room-id>`
+- `&name=<your-name>`
+
+Example: `http://localhost:5173/?room=dev-room&name=Alice`
+
+### Methods
+
+The connector singleton is exposed during connection at `window.cactusNet` for quick manual testing in the browser console. Common emits:
+
+- `joinRoom(roomId, playerName)`
+- `startMatch(payload)`
+- `dealInitial(payload)`
+- `drawCard(payload)`
+- `discardPending(payload)`
+- `swapWithHand(payload)`
+- `swapWithDiscard(payload)`
+- `stack(payload)`
+- `activatePower(payload)`
+- `closeReveal(payload)`
+- `swapAnySelect(payload)`
+- `callCactus(payload)`
+- `resetRound(payload)`
+
+All incoming events are logged to the console via `onAny` for visibility.

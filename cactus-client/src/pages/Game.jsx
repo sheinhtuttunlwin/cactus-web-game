@@ -3,6 +3,7 @@ import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
 import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../components/power/PowerUI";
 import { calculateHandScore } from "../game/scoring";
+import net from "../network";
 import * as powerEffects from "../game/powerEffects";
 
 function Game ({ 
@@ -101,6 +102,29 @@ function Game ({
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
       actions.dealInitial({ setDeck, setDiscardPile, setPlayers, setCurrentPlayer, setHasStackedThisRound });
+    }, []);
+
+    // Thin Socket.IO connector for dev exercises (no UI changes)
+    useEffect(() => {
+      // eslint-disable-next-line no-console
+      console.log('[NET] VITE_USE_SOCKET =', import.meta.env.VITE_USE_SOCKET);
+      
+      // Expose connector for debugging regardless of env flag
+      if (typeof window !== 'undefined') {
+        window.cactusNet = net;
+      }
+      
+      if (import.meta.env.VITE_USE_SOCKET !== "true") return;
+      
+      net.connect();
+      const params = new URLSearchParams(window.location.search);
+      const roomId = params.get("room") || "dev-room";
+      const playerName = params.get("name") || "Player";
+      net.joinRoom(roomId, playerName);
+      net.onAny((event, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log("[NET]", event, ...args);
+      });
     }, []);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
