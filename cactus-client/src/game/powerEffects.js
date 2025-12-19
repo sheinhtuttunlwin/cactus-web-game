@@ -1,22 +1,35 @@
-import { SWAP_ANY } from "./powers";
+import { SWAP_ANY, SELF_PEEK, OPPONENT_PEEK } from "./powers";
 
 /**
  * Activates self-peek power: reveals the player's own card for 4 seconds
  */
 export const activateSelfPeek = (playerId, cardId, setPlayers) => {
   const revealEnds = Date.now() + 4000;
-  setPlayers((prev) => ({
-    ...prev,
-    [playerId]: {
-      ...prev[playerId],
-      revealedCardId: cardId,
-      activePower: null,
-      activePowerToken: null,
-      activePowerExpiresAt: null,
-      activePowerLabel: null,
-      cardRevealExpiresAt: revealEnds,
-    },
-  }));
+  // Validate active power state atomically
+  setPlayers((prev) => {
+    const p = prev[playerId];
+    if (
+      !p ||
+      p.activePower !== SELF_PEEK ||
+      !p.activePowerToken ||
+      !p.activePowerExpiresAt ||
+      Date.now() >= p.activePowerExpiresAt
+    ) {
+      return prev; // invalid or expired power; ignore
+    }
+    return {
+      ...prev,
+      [playerId]: {
+        ...p,
+        revealedCardId: cardId,
+        activePower: null,
+        activePowerToken: null,
+        activePowerExpiresAt: null,
+        activePowerLabel: null,
+        cardRevealExpiresAt: revealEnds,
+      },
+    };
+  });
   setTimeout(() => {
     setPlayers((prev) => ({
       ...prev,
@@ -34,21 +47,35 @@ export const activateSelfPeek = (playerId, cardId, setPlayers) => {
  */
 export const activateOpponentPeek = (targetPlayerId, activatingPlayerId, cardId, setPlayers) => {
   const revealEnds = Date.now() + 4000;
-  setPlayers((prev) => ({
-    ...prev,
-    [targetPlayerId]: {
-      ...prev[targetPlayerId],
-      revealedCardId: cardId,
-      cardRevealExpiresAt: revealEnds,
-    },
-    [activatingPlayerId]: {
-      ...prev[activatingPlayerId],
-      activePower: null,
-      activePowerToken: null,
-      activePowerExpiresAt: null,
-      activePowerLabel: null,
-    },
-  }));
+  // Validate the activating player's power atomically
+  setPlayers((prev) => {
+    const activator = prev[activatingPlayerId];
+    const target = prev[targetPlayerId];
+    if (
+      !activator ||
+      activator.activePower !== OPPONENT_PEEK ||
+      !activator.activePowerToken ||
+      !activator.activePowerExpiresAt ||
+      Date.now() >= activator.activePowerExpiresAt
+    ) {
+      return prev; // invalid or expired power; ignore
+    }
+    return {
+      ...prev,
+      [targetPlayerId]: {
+        ...target,
+        revealedCardId: cardId,
+        cardRevealExpiresAt: revealEnds,
+      },
+      [activatingPlayerId]: {
+        ...activator,
+        activePower: null,
+        activePowerToken: null,
+        activePowerExpiresAt: null,
+        activePowerLabel: null,
+      },
+    };
+  });
   setTimeout(() => {
     setPlayers((prev) => ({
       ...prev,
@@ -79,9 +106,10 @@ export const closeCardReveal = (playerId, setPlayers) => {
  * Initiates or continues swap-any card selection
  */
 export const handleSwapAnySelection = (playerId, cardIndex, cardId, players, swapFirstCard, swapAnimation, setSwapFirstCard, setSwapAnimation) => {
-  const swapPowerActive = players[1].activePower === SWAP_ANY || players[2].activePower === SWAP_ANY;
-  if (!swapPowerActive) return;
-
+  const holder = players[1].activePower === SWAP_ANY ? players[1] : players[2].activePower === SWAP_ANY ? players[2] : null;
+  if (!holder) return;
+  // Ensure valid token and not expired
+  if (!holder.activePowerToken || !holder.activePowerExpiresAt || Date.now() >= holder.activePowerExpiresAt) return;
   if (swapAnimation) return; // ignore clicks while animating
 
   if (!swapFirstCard) {
@@ -113,16 +141,33 @@ export const handleSwapAnySelection = (playerId, cardIndex, cardId, players, swa
  */
 export const executeSwap = (from, to, setPlayers) => {
   setPlayers((prev) => {
+    // Validate players and indices to avoid out-of-bounds during resets/animations
+    const pAId = from?.playerId;
+    const pBId = to?.playerId;
+    if (pAId == null || pBId == null) return prev;
+
+    const pAOrig = prev[pAId];
+    const pBOrig = prev[pBId];
+    if (!pAOrig || !pBOrig) return prev;
+    if (!Array.isArray(pAOrig.hand) || !Array.isArray(pBOrig.hand)) return prev;
+    if (
+      typeof from.cardIndex !== "number" ||
+      typeof to.cardIndex !== "number" ||
+      from.cardIndex < 0 ||
+      to.cardIndex < 0 ||
+      from.cardIndex >= pAOrig.hand.length ||
+      to.cardIndex >= pBOrig.hand.length
+    ) {
+      return prev;
+    }
+
     const next = { ...prev };
-
-    const pAId = from.playerId;
-    const pBId = to.playerId;
-
-    const pA = { ...next[pAId], hand: [...next[pAId].hand] };
-    const pB = { ...next[pBId], hand: [...next[pBId].hand] };
+    const pA = { ...pAOrig, hand: [...pAOrig.hand] };
+    const pB = { ...pBOrig, hand: [...pBOrig.hand] };
 
     const cardA = pA.hand[from.cardIndex];
     const cardB = pB.hand[to.cardIndex];
+    if (!cardA || !cardB) return prev;
 
     pA.hand[from.cardIndex] = cardB;
     pB.hand[to.cardIndex] = cardA;

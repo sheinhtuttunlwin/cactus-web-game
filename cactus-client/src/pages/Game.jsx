@@ -36,6 +36,7 @@ function Game ({
     const powerLabel = powerOwner?.activePowerLabel || (powerOwner?.activePower === SWAP_ANY ? "Q" : powerOwner?.activePower === OPPONENT_PEEK ? "9/10/J" : powerOwner?.activePower ? "6/7/8" : "");
     const player1Score = finalStackExpired ? calculateHandScore(players[1].hand) : null;
     const player2Score = finalStackExpired ? calculateHandScore(players[2].hand) : null;
+    const isAnimating = !!swapAnimation;
     const winningPlayer = finalStackExpired
       ? player1Score < player2Score
         ? 1
@@ -94,10 +95,15 @@ function Game ({
     }, [players[currentPlayer].pendingCard, currentPlayer]);
 
     const handleDraw = () => {
+      if (roundOver || finalStackExpired || isAnimating) return;
+      if (deck.length === 0) return;
+      if (players[currentPlayer].pendingCard) return;
+      if (players[currentPlayer].swappingWithDiscard) return;
       actions.handleDraw({ deck, setDeck, players, setPlayers, currentPlayer });
     };
 
     const handleDiscardPending = () => {
+      if (isAnimating) return;
       // Check if this player called Cactus before their turn ends
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       
@@ -111,6 +117,7 @@ function Game ({
     };
 
     const handleSwapWith = (index) => {
+      if (finalStackExpired || isAnimating) return;
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWith({ players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
@@ -121,6 +128,9 @@ function Game ({
 
 
     const handleStack = (playerNum, index) => {
+      if (finalStackExpired || isAnimating) return;
+      if (players[playerNum].pendingCard) return;
+      if (players[playerNum].swappingWithDiscard) return;
       if (hasStackedThisRound) {
         alert("This card has already been stacked on. Discard or swap to add a new card.");
         return;
@@ -133,6 +143,7 @@ function Game ({
     };
 
     const handleSwapWithDiscard = (index) => {
+      if (finalStackExpired || isAnimating) return;
       const callerFinishingTurn = cactusCalledBy === currentPlayer;
       actions.handleSwapWithDiscard({ discardPile, players, setPlayers, currentPlayer, index, setDiscardPile, setHasStackedThisRound, setCurrentPlayer });
       
@@ -142,6 +153,7 @@ function Game ({
     };
 
     const handleSwapAnyCard = (playerId, cardIndex, cardId) => {
+      if (finalStackExpired || isAnimating) return;
       powerEffects.handleSwapAnySelection(
         playerId,
         cardIndex,
