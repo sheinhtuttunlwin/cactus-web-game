@@ -678,7 +678,7 @@ function Game ({
                             }}
                           />
                           ) : null}
-                          {isCardSelected ? (
+                          {isCardSelected && (!isOnline || myPlayerId === 1) ? (
                             <button
                               style={styles.cancelSelect}
                               onClick={() => setSwapFirstCard(null)}
@@ -877,7 +877,7 @@ function Game ({
                             }}
                           />
                           ) : null}
-                          {isCardSelected ? (
+                          {isCardSelected && (!isOnline || myPlayerId === 2) ? (
                             <button
                               style={styles.cancelSelect}
                               onClick={() => setSwapFirstCard(null)}
