@@ -56,6 +56,12 @@ function makeInitialRoundState() {
 function filterStateFor(room, playerId) {
   const round = room.round;
   if (!round) return null;
+  
+  // If round is over, don't mask anything - show all cards
+  if (round.finalStackExpired) {
+    return JSON.parse(JSON.stringify(round));
+  }
+  
   const maskHand = (hand, revealedCardId, revealedBy, viewingPlayerId) => hand.map(c => {
     // If this card is revealed AND the viewing player is the one who revealed it, send full data
     if (c.id === revealedCardId && revealedBy === viewingPlayerId) {
