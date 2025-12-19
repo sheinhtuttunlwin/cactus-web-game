@@ -2,6 +2,7 @@ import * as actions from "../game/actions";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
 import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../components/power/PowerUI";
+import { calculateHandScore } from "../game/scoring";
 import * as powerEffects from "../game/powerEffects";
 
 function Game () {
@@ -26,6 +27,15 @@ function Game () {
     const powerOwner = powerOwnerId ? players[powerOwnerId] : null;
     const powerVariant = powerOwner?.activePower === SWAP_ANY ? "swap" : powerOwner?.activePower === OPPONENT_PEEK ? "opponent" : powerOwner?.activePower ? "self" : "swap";
     const powerLabel = powerOwner?.activePowerLabel || (powerOwner?.activePower === SWAP_ANY ? "Q" : powerOwner?.activePower === OPPONENT_PEEK ? "9/10/J" : powerOwner?.activePower ? "6/7/8" : "");
+    const player1Score = finalStackExpired ? calculateHandScore(players[1].hand) : null;
+    const player2Score = finalStackExpired ? calculateHandScore(players[2].hand) : null;
+    const winningPlayer = finalStackExpired
+      ? player1Score < player2Score
+        ? 1
+        : player2Score < player1Score
+        ? 2
+        : null
+      : null;
 
     // Ensure each player's toggle starts closed when their power changes or expires
     useEffect(() => {
@@ -36,7 +46,7 @@ function Game () {
       setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: false }));
     }, [players[2].activePower, players[2].activePowerExpiresAt]);
 
-    // Start final stack timer when round ends
+    // Start final stack timer when round ends (10s) and reset expiry flag
     useEffect(() => {
       if (roundOver) {
         setFinalStackExpiresAt(Date.now() + 10000);
@@ -44,17 +54,21 @@ function Game () {
       }
     }, [roundOver]);
 
-    // Monitor final stack timer expiry
+    // Monitor final stack timer expiry with cleanup to avoid stray timers across resets
     useEffect(() => {
-      if (!finalStackExpiresAt) return;
-      const checkExpiry = () => {
+      if (!finalStackExpiresAt) return undefined;
+      let timerId = null;
+      const tick = () => {
         if (Date.now() >= finalStackExpiresAt) {
           setFinalStackExpired(true);
-        } else {
-          setTimeout(checkExpiry, 100);
+          if (timerId) clearInterval(timerId);
         }
       };
-      checkExpiry();
+      timerId = setInterval(tick, 100);
+      tick(); // immediate check
+      return () => {
+        if (timerId) clearInterval(timerId);
+      };
     }, [finalStackExpiresAt]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
@@ -181,6 +195,12 @@ function Game () {
                     label="Final Stack"
                     variant="swap"
                   />
+                ) : null}
+                {finalStackExpired ? (
+                  <div style={styles.scoreRow}>
+                    <div style={winningPlayer === 1 ? styles.scoreCardWinner : styles.scoreCard}>Player 1 Score: {player1Score}</div>
+                    <div style={winningPlayer === 2 ? styles.scoreCardWinner : styles.scoreCard}>Player 2 Score: {player2Score}</div>
+                  </div>
                 ) : null}
             </header>
 
@@ -702,6 +722,33 @@ const styles = {
     fontSize: 18,
     fontWeight: 700,
     color: "rgba(239, 68, 68, 0.9)",
+  },
+
+  scoreRow: {
+    display: "flex",
+    gap: 12,
+    marginTop: 4,
+    flexWrap: "wrap",
+  },
+
+  scoreCard: {
+    padding: "8px 12px",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+
+  scoreCardWinner: {
+    padding: "8px 12px",
+    borderRadius: 12,
+    background: "rgba(34,197,94,0.15)",
+    border: "1px solid rgba(34,197,94,0.6)",
+    boxShadow: "0 0 18px rgba(34,197,94,0.45)",
+    transform: "translateY(-2px)",
+    fontWeight: 800,
+    fontSize: 15,
   },
 
   centerArea: {
