@@ -15,6 +15,8 @@ function Game () {
     const [powerUiOpenByPlayer, setPowerUiOpenByPlayer] = useState({ 1: false, 2: false });
     const [cactusCalledBy, setCactusCalledBy] = useState(null); // null, 1, or 2
     const [roundOver, setRoundOver] = useState(false);
+    const [finalStackExpiresAt, setFinalStackExpiresAt] = useState(null);
+    const [finalStackExpired, setFinalStackExpired] = useState(false);
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -34,27 +36,26 @@ function Game () {
       setPowerUiOpenByPlayer((prev) => ({ ...prev, 2: false }));
     }, [players[2].activePower, players[2].activePowerExpiresAt]);
 
-    // Clear all active powers when round ends
+    // Start final stack timer when round ends
     useEffect(() => {
       if (roundOver) {
-        setPlayers((prev) => ({
-          1: {
-            ...prev[1],
-            activePower: null,
-            activePowerToken: null,
-            activePowerExpiresAt: null,
-            activePowerLabel: null,
-          },
-          2: {
-            ...prev[2],
-            activePower: null,
-            activePowerToken: null,
-            activePowerExpiresAt: null,
-            activePowerLabel: null,
-          },
-        }));
+        setFinalStackExpiresAt(Date.now() + 10000);
+        setFinalStackExpired(false);
       }
     }, [roundOver]);
+
+    // Monitor final stack timer expiry
+    useEffect(() => {
+      if (!finalStackExpiresAt) return;
+      const checkExpiry = () => {
+        if (Date.now() >= finalStackExpiresAt) {
+          setFinalStackExpired(true);
+        } else {
+          setTimeout(checkExpiry, 100);
+        }
+      };
+      checkExpiry();
+    }, [finalStackExpiresAt]);
 
     // Deal 4 cards to each player at game start and put one card in discard pile
     useEffect(() => {
@@ -137,6 +138,8 @@ function Game () {
       actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
       setCactusCalledBy(null);
       setRoundOver(false);
+      setFinalStackExpiresAt(null);
+      setFinalStackExpired(false);
     };
 
     const handleCactus = () => {
@@ -172,6 +175,13 @@ function Game () {
                 ) : (
                   <p style={styles.turnIndicator}>Player {currentPlayer}'s Turn</p>
                 )}
+                {finalStackExpiresAt && Date.now() < finalStackExpiresAt ? (
+                  <PowerTimeIndicator
+                    expiresAt={finalStackExpiresAt}
+                    label="Final Stack"
+                    variant="swap"
+                  />
+                ) : null}
             </header>
 
             <div style={styles.centerArea}>
@@ -288,7 +298,7 @@ function Game () {
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
                   <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
-                  {players[1].activePower && players[1].activePowerExpiresAt ? (
+                  {players[1].activePower && players[1].activePowerExpiresAt && !finalStackExpired ? (
                     <PowerTimeIndicator
                       expiresAt={players[1].activePowerExpiresAt}
                       label={
@@ -347,11 +357,13 @@ function Game () {
                           {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
-                              style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard)}
+                              style={actionButtonStyle(styles.stackButton, !!players[1].pendingCard || players[1].swappingWithDiscard || finalStackExpired)}
                               onClick={() => handleStack(1, idx)}
-                              disabled={!!players[1].pendingCard || players[1].swappingWithDiscard}
+                              disabled={!!players[1].pendingCard || players[1].swappingWithDiscard || finalStackExpired}
                               title={
-                                players[1].swappingWithDiscard
+                                finalStackExpired
+                                  ? "Final stack time is over"
+                                  : players[1].swappingWithDiscard
                                   ? "Cancel swap with discard first"
                                   : players[1].pendingCard
                                   ? "Resolve drawn card first"
@@ -364,7 +376,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[1].revealedCardId === card.id || roundOver ? "none" : styles.miniCardText.filter,
+                                filter: players[1].revealedCardId === card.id || finalStackExpired ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -387,7 +399,7 @@ function Game () {
                               onClick={() => powerEffects.closeCardReveal(1, setPlayers)}
                             />
                           ) : null}
-                          {powerUiOpenByPlayer[1] && players[1].activePower === SELF_PEEK ? (
+                          {powerUiOpenByPlayer[1] && players[1].activePower === SELF_PEEK && !finalStackExpired ? (
                           <PowerButton
                             power={SELF_PEEK}
                             activePower={players[1].activePower}
@@ -400,7 +412,7 @@ function Game () {
                             onClose={() => powerEffects.closeCardReveal(1, setPlayers)}
                           />
                           ) : null}
-                          {powerUiOpenByPlayer[2] && players[2].activePower === OPPONENT_PEEK ? (
+                          {powerUiOpenByPlayer[2] && players[2].activePower === OPPONENT_PEEK && !finalStackExpired ? (
                           <PowerButton
                             power={OPPONENT_PEEK}
                             activePower={players[2].activePower}
@@ -423,7 +435,7 @@ function Game () {
                               ×
                             </button>
                           ) : null}
-                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) && !finalStackExpired ? (
                           <PowerButton
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
@@ -454,7 +466,7 @@ function Game () {
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
                   <span>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
-                  {players[2].activePower && players[2].activePowerExpiresAt ? (
+                  {players[2].activePower && players[2].activePowerExpiresAt && !finalStackExpired ? (
                     <PowerTimeIndicator
                       expiresAt={players[2].activePowerExpiresAt}
                       label={
@@ -513,11 +525,13 @@ function Game () {
                           {/* Timer is shown next to player label; no minicard timer overlay */}
                           <div style={{...styles.miniCard, ...(isCardSelected ? styles.selectedMiniCard : {}), ...cardAnimStyle}}>
                             <button
-                              style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard)}
+                              style={actionButtonStyle(styles.stackButton, !!players[2].pendingCard || players[2].swappingWithDiscard || finalStackExpired)}
                               onClick={() => handleStack(2, idx)}
-                              disabled={!!players[2].pendingCard || players[2].swappingWithDiscard}
+                              disabled={!!players[2].pendingCard || players[2].swappingWithDiscard || finalStackExpired}
                               title={
-                                players[2].swappingWithDiscard
+                                finalStackExpired
+                                  ? "Final stack time is over"
+                                  : players[2].swappingWithDiscard
                                   ? "Cancel swap with discard first"
                                   : players[2].pendingCard
                                   ? "Resolve drawn card first"
@@ -530,7 +544,7 @@ function Game () {
                               style={{
                                 ...styles.miniCardText,
                                 color: card.color === "red" ? "crimson" : "white",
-                                filter: players[2].revealedCardId === card.id || roundOver ? "none" : styles.miniCardText.filter,
+                                filter: players[2].revealedCardId === card.id || finalStackExpired ? "none" : styles.miniCardText.filter,
                               }}
                             >
                               {card.rank}
@@ -553,7 +567,7 @@ function Game () {
                               onClick={() => powerEffects.closeCardReveal(2, setPlayers)}
                             />
                           ) : null}
-                          {powerUiOpenByPlayer[2] && players[2].activePower === SELF_PEEK ? (
+                          {powerUiOpenByPlayer[2] && players[2].activePower === SELF_PEEK && !finalStackExpired ? (
                           <PowerButton
                             power={SELF_PEEK}
                             activePower={players[2].activePower}
@@ -566,7 +580,7 @@ function Game () {
                             onClose={() => powerEffects.closeCardReveal(2, setPlayers)}
                           />
                           ) : null}
-                          {powerUiOpenByPlayer[1] && players[1].activePower === OPPONENT_PEEK ? (
+                          {powerUiOpenByPlayer[1] && players[1].activePower === OPPONENT_PEEK && !finalStackExpired ? (
                           <PowerButton
                             power={OPPONENT_PEEK}
                             activePower={players[1].activePower}
@@ -589,7 +603,7 @@ function Game () {
                               ×
                             </button>
                           ) : null}
-                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) ? (
+                          {((players[1].activePower === SWAP_ANY && powerUiOpenByPlayer[1]) || (players[2].activePower === SWAP_ANY && powerUiOpenByPlayer[2])) && !finalStackExpired ? (
                           <PowerButton
                             power={SWAP_ANY}
                             activePower={players[1].activePower === SWAP_ANY ? SWAP_ANY : players[2].activePower === SWAP_ANY ? SWAP_ANY : null}
