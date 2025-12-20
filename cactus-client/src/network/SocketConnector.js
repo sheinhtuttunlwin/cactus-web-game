@@ -112,6 +112,9 @@ class SocketConnector {
   resetRound(payload = {}) {
     this._emit('reset_round', payload);
   }
+  refillDeck(payload = {}) {
+    this._emit('refill_deck', payload);
+  }
 
   // Internal send wrapper
   _emit(event, payload) {

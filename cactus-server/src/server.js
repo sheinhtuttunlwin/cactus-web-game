@@ -331,9 +331,15 @@ io.on('connection', (socket) => {
     const pid = getPlayerId(room, socket.id);
     if (!pid) return;
     const r = room.round;
-    if (r.discardPile.length === 0) return;
+    if (r.discardPile.length === 0) {
+      socket.emit('stack_error', { message: 'No card to stack on (discard pile is empty)' });
+      return;
+    }
     const hand = r.players[pid].hand;
-    if (hand.length <= 1) return; // must keep at least 1 card
+    if (hand.length <= 1) {
+      socket.emit('stack_error', { message: 'You must keep at least 1 card in your hand' });
+      return;
+    }
     if (typeof index !== 'number' || index < 0 || index >= hand.length) return;
     const top = r.discardPile[r.discardPile.length - 1];
     const handCard = hand[index];
@@ -343,7 +349,8 @@ io.on('connection', (socket) => {
       r.discardPile.push(handCard);
       r.hasStackedThisRound = true;
     } else {
-      // draw up to 2 cards
+      // draw up to 2 cards as penalty
+      socket.emit('stack_error', { message: `Card rank ${handCard.rank} does not match discard pile rank ${top.rank}` });
       for (let i = 0; i < 2 && r.deck.length > 0; i++) {
         hand.push(r.deck.shift());
       }
@@ -458,6 +465,35 @@ io.on('connection', (socket) => {
     if (!room.players[socket.id]) return;
     room.round = makeInitialRoundState();
     clearFinalStackTimer(room);
+    broadcastRoom(room);
+  });
+
+  socket.on('refill_deck', ({ roomId }) => {
+    console.log('[SERVER] refill_deck:', socket.id, roomId);
+    const room = rooms.ensure(roomId);
+    const pid = getPlayerId(room, socket.id);
+    if (!pid) return;
+    const r = room.round;
+    if (!r || !r.discardPile || r.discardPile.length === 0) return;
+    
+    // If only one card in discard, move it to deck
+    if (r.discardPile.length === 1) {
+      r.deck.push(r.discardPile[0]);
+      r.discardPile = [];
+      broadcastRoom(room);
+      return;
+    }
+    
+    // Multiple cards: preserve top, shuffle rest back into deck
+    const top = r.discardPile[r.discardPile.length - 1];
+    const rest = r.discardPile.slice(0, -1);
+    // Simple shuffle
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    r.deck.push(...rest);
+    r.discardPile = [top];
     broadcastRoom(room);
   });
 

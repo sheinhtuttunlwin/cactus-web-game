@@ -168,6 +168,12 @@ function Game ({
       net.on('room_update', handleRoomUpdate);
       net.on('round_update', handleRoundUpdate);
       
+      // Listen for stack errors
+      const handleStackError = ({ message }) => {
+        alert(message);
+      };
+      net.on('stack_error', handleStackError);
+      
       const handleConnect = () => {
         net.joinRoom(room, playerName);
       };
@@ -176,6 +182,7 @@ function Game ({
       return () => {
         net.off('room_update', handleRoomUpdate);
         net.off('round_update', handleRoundUpdate);
+        net.off('stack_error', handleStackError);
         net.off('connect', handleConnect);
       };
     }, []);
@@ -320,7 +327,11 @@ function Game ({
         alert("No cards in discard to reset deck.");
         return;
       }
-      actions.recycleDiscardIntoDeck({ discardPile, setDeck, setDiscardPile });
+      if (isOnline) {
+        net.refillDeck({ roomId });
+      } else {
+        actions.recycleDiscardIntoDeck({ discardPile, setDeck, setDiscardPile });
+      }
     };
 
     const handleCactus = () => {
