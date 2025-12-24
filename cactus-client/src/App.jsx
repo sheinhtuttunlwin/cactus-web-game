@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import NavBar from './components/NavBar';
 import Match from './pages/Match';
 import Game from './pages/Game';
+import Lobby from './pages/Lobby';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path='/' element={<Home />} /> 
         <Route path='/game' element={<Match />} />
         <Route path='/play' element={<Game />} />
+        <Route path='/lobby' element={<Lobby />} />
       </Routes>
     </BrowserRouter>
   );

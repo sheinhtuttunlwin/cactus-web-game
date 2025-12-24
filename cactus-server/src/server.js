@@ -6,7 +6,7 @@ import { createShuffledDeck } from './game/deck.js';
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'],
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -178,20 +178,31 @@ function runSwapAnimation(room, from, to) {
 io.on('connection', (socket) => {
   console.log('[SERVER] Socket connected:', socket.id);
   
-  socket.on('join_room', ({ roomId }) => {
-    console.log('[SERVER] join_room:', socket.id, roomId);
+  socket.on('join_room', ({ roomId, playerName }) => {
+    console.log('[SERVER] join_room:', socket.id, roomId, playerName);
     const room = rooms.ensure(roomId);
-    // assign player slot
+    
+    // If this is a converted lobby room, try to find the player by socket ID in the original lobby
     let assigned = null;
-    if (!room.socketsByPlayer[1]) { room.socketsByPlayer[1] = socket.id; assigned = 1; }
-    else if (!room.socketsByPlayer[2]) { room.socketsByPlayer[2] = socket.id; assigned = 2; }
-    else { socket.emit('error', { message: 'Room full' }); return; }
+    if (room.socketsByPlayer[1] === socket.id) {
+      assigned = 1;
+    } else if (room.socketsByPlayer[2] === socket.id) {
+      assigned = 2;
+    } else {
+      // Not a reconnecting player, try to assign an open slot
+      if (!room.socketsByPlayer[1]) { room.socketsByPlayer[1] = socket.id; assigned = 1; }
+      else if (!room.socketsByPlayer[2]) { room.socketsByPlayer[2] = socket.id; assigned = 2; }
+      else { socket.emit('error', { message: 'Room full' }); return; }
+    }
+    
     room.players[socket.id] = { playerId: assigned };
     socket.join(roomId);
+    
     if (!room.round) {
       room.round = makeInitialRoundState();
       room.phase = 'playing';
     }
+    
     socket.emit('room_update', { roomId, playerId: assigned });
     broadcastRoom(room);
   });
@@ -463,6 +474,7 @@ io.on('connection', (socket) => {
     console.log('[SERVER] reset_round:', socket.id, roomId);
     const room = rooms.ensure(roomId);
     if (!room.players[socket.id]) return;
+    room.currentRound = (room.currentRound || 1) + 1;
     room.round = makeInitialRoundState();
     clearFinalStackTimer(room);
     broadcastRoom(room);
@@ -508,7 +520,66 @@ io.on('connection', (socket) => {
       }
     }
   });
-});
+
+  // --- Lobby events ---
+  socket.on('create_lobby', ({ settings, playerName }) => {
+    console.log('[SERVER] create_lobby:', socket.id, settings);
+    const lobbyCode = rooms.createLobby(settings);
+    const playerId = 1; // First player in lobby is player 1
+    rooms.addPlayerToLobby(lobbyCode, playerId, playerName, socket.id);
+    socket.join(`lobby:${lobbyCode}`);
+    const lobbyState = rooms.getLobbyState(lobbyCode);
+    socket.emit('lobby_created', { lobbyCode, lobbyState });
+    io.to(`lobby:${lobbyCode}`).emit('lobby_update', lobbyState);
+  });
+
+  socket.on('join_lobby', ({ lobbyCode, playerName }) => {
+    console.log('[SERVER] join_lobby:', socket.id, lobbyCode);
+    const lobby = rooms.getLobby(lobbyCode);
+    if (!lobby) {
+      socket.emit('error', { message: 'Lobby not found' });
+      return;
+    }
+    if (Object.keys(lobby.players).length >= lobby.maxPlayers) {
+      socket.emit('error', { message: 'Lobby is full' });
+      return;
+    }
+    // Assign next available player ID
+    const playerId = lobby.maxPlayers === 2
+      ? (Object.keys(lobby.players).includes('1') ? 2 : 1)
+      : Object.keys(lobby.players).length + 1;
+    
+    rooms.addPlayerToLobby(lobbyCode, playerId, playerName, socket.id);
+    socket.join(`lobby:${lobbyCode}`);
+    socket.emit('lobby_joined', { lobbyCode });
+    io.to(`lobby:${lobbyCode}`).emit('lobby_update', rooms.getLobbyState(lobbyCode));
+  });
+
+  socket.on('start_lobby', ({ lobbyCode }) => {
+    console.log('[SERVER] start_lobby:', socket.id, lobbyCode);
+    const lobby = rooms.getLobby(lobbyCode);
+    if (!lobby) {
+      socket.emit('error', { message: 'Lobby not found' });
+      return;
+    }
+    const room = rooms.ensure(lobbyCode);
+    room.matchSettings = lobby.settings;
+    room.phase = 'playing';
+    room.currentRound = 1;
+    room.totalScores = { 1: 0, 2: 0 };
+    room.round = makeInitialRoundState();
+    
+    // Assign sockets by player ID from lobby
+    Object.entries(lobby.players).forEach(([playerId, player]) => {
+      room.socketsByPlayer[playerId] = player.socketId;
+      room.players[player.socketId] = { playerId: parseInt(playerId) };
+    });
+    
+    rooms.deleteLobby(lobbyCode);
+    io.to(`lobby:${lobbyCode}`).emit('lobby_started', { lobbyCode });
+    // Broadcast initial game state
+    broadcastRoom(room);
+  });});
 
 const PORT = process.env.PORT || 5050;
 httpServer.listen(PORT, () => {

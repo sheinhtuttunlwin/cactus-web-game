@@ -8,6 +8,7 @@ function NavBar() {
             <div style={styles.links}>
                 <Link to="/" style={styles.link}>Home</Link>
                 <Link to="/game" style={styles.link}>Play</Link>
+                <Link to="/lobby" style={styles.link}>Lobby</Link>
             </div>
         </nav>
     );

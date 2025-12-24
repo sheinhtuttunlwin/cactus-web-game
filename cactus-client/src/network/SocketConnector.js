@@ -116,6 +116,15 @@ class SocketConnector {
     this._emit('refill_deck', payload);
   }
 
+  // Lobby API
+  createLobby(payload = {}) {
+    this._emit('create_lobby', payload);
+  }
+
+  joinLobby(payload = {}) {
+    this._emit('join_lobby', payload);
+  }
+
   // Internal send wrapper
   _emit(event, payload) {
     if (!this._socket || !this._connected) {

@@ -13,6 +13,9 @@ function Game ({
   totalScores = {},
   onRoundComplete = null,
   onExitToSetup = null,
+  isOnlineFromLobby = false,
+  lobbyCode = null,
+  playerNameForLobby = null,
 }) {
 
     const [deck, setDeck] = useState([]);
@@ -126,12 +129,21 @@ function Game ({
         console.log('[NET] cactusNet exposed to window');
       }
       
-      if (import.meta.env.VITE_USE_SOCKET !== "true") return;
+      // If coming from lobby, always enable online mode
+      if (!isOnlineFromLobby && import.meta.env.VITE_USE_SOCKET !== "true") return;
       
       net.connect();
-      const params = new URLSearchParams(window.location.search);
-      const room = params.get("room") || "dev-room";
-      const playerName = params.get("name") || "Player";
+      
+      // Determine room and playerName from either lobby or URL params
+      let room, playerName;
+      if (isOnlineFromLobby && lobbyCode) {
+        room = lobbyCode;
+        playerName = playerNameForLobby || "Player";
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        room = params.get("room") || "dev-room";
+        playerName = params.get("name") || "Player";
+      }
       
       setRoomId(room);
       setIsOnline(true);
@@ -174,10 +186,19 @@ function Game ({
       };
       net.on('stack_error', handleStackError);
       
+      // If socket is already connected (from lobby), join immediately
+      // Otherwise, wait for connect event
       const handleConnect = () => {
         net.joinRoom(room, playerName);
       };
-      net.on('connect', handleConnect);
+      
+      if (net._socket && net._connected) {
+        // Already connected - join immediately
+        net.joinRoom(room, playerName);
+      } else {
+        // Not connected yet - wait for connect event
+        net.on('connect', handleConnect);
+      }
       
       return () => {
         net.off('room_update', handleRoomUpdate);
@@ -185,7 +206,7 @@ function Game ({
         net.off('stack_error', handleStackError);
         net.off('connect', handleConnect);
       };
-    }, []);
+    }, [isOnlineFromLobby, lobbyCode, playerNameForLobby]);
 
     // If a card is drawn, cancel discard-swap mode to avoid invalid state combinations
     useEffect(() => {
