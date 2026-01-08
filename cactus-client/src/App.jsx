@@ -1,19 +1,15 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
-import NavBar from './components/NavBar';
-import Match from './pages/Match';
-import Game from './pages/Game';
 import Lobby from './pages/Lobby';
+import NavBar from './components/NavBar';
 
 function App() {
   return (
     <BrowserRouter>
-      <NavBar />  {/* Global Navigation Bar*/}
+      <NavBar />
       <Routes>
-        <Route path='/' element={<Home />} /> 
-        <Route path='/game' element={<Match />} />
-        <Route path='/play' element={<Game />} />
-        <Route path='/lobby' element={<Lobby />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/play" element={<Lobby />} />
       </Routes>
     </BrowserRouter>
   );
