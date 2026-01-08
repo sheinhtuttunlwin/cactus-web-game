@@ -20,6 +20,26 @@ const POWER = {
   SWAP_ANY: 'SWAP_ANY',
 };
 
+// Simple scoring helpers (mirror client logic)
+function getCardValue(card) {
+  if (!card) return 0;
+  const { rank, color } = card;
+  const numeric = parseInt(rank, 10);
+  if (!isNaN(numeric)) return numeric;
+  switch (rank) {
+    case 'A': return 1;
+    case 'J': return 10;
+    case 'Q': return 10;
+    case 'K': return color === 'red' ? 0 : 10;
+    default: return 0;
+  }
+}
+
+function calculateHandScoreServer(hand) {
+  if (!hand || hand.length === 0) return 0;
+  return hand.reduce((s, c) => s + getCardValue(c), 0);
+}
+
 function getPowerForCard(card) {
   if (!card || card.rank == null) return null;
   const r = String(card.rank);
@@ -84,8 +104,9 @@ function filterStateFor(room, playerId) {
 function broadcastRoom(room) {
   const s1 = room.socketsByPlayer[1];
   const s2 = room.socketsByPlayer[2];
-  if (s1) io.to(s1).emit('round_update', { phase: room.phase, round: filterStateFor(room, 1), match: { currentRound: room.currentRound, totalScores: room.totalScores, settings: room.matchSettings } });
-  if (s2) io.to(s2).emit('round_update', { phase: room.phase, round: filterStateFor(room, 2), match: { currentRound: room.currentRound, totalScores: room.totalScores, settings: room.matchSettings } });
+  const matchPayload = { currentRound: room.currentRound, totalScores: room.totalScores, settings: room.matchSettings, playerNames: room.playerNames || null, history: room.matchHistory || [] };
+  if (s1) io.to(s1).emit('round_update', { phase: room.phase, round: filterStateFor(room, 1), match: matchPayload });
+  if (s2) io.to(s2).emit('round_update', { phase: room.phase, round: filterStateFor(room, 2), match: matchPayload });
 }
 
 function getPlayerId(room, socketId) {
@@ -118,9 +139,23 @@ function startFinalStackTimer(room) {
   room.round.finalStackExpired = false;
   room.timers.finalStack = setInterval(() => {
     if (!room.round) return;
-    if (Date.now() >= room.round.finalStackExpiresAt) {
+      if (Date.now() >= room.round.finalStackExpiresAt) {
       room.round.finalStackExpired = true;
       clearFinalStackTimer(room);
+      // Compute round points using full hands on server and update match totals once
+      if (!room.round.scoresApplied) {
+        const p1 = calculateHandScoreServer(room.round.players[1].hand);
+        const p2 = calculateHandScoreServer(room.round.players[2].hand);
+        const roundScores = { 1: p1, 2: p2 };
+        if (p1 < p2) roundScores[1] = 0;
+        else if (p2 < p1) roundScores[2] = 0;
+        room.totalScores = room.totalScores || { 1: 0, 2: 0 };
+        room.totalScores[1] = (room.totalScores[1] || 0) + (roundScores[1] || 0);
+        room.totalScores[2] = (room.totalScores[2] || 0) + (roundScores[2] || 0);
+        room.round.scoresApplied = true;
+        room.matchHistory = room.matchHistory || [];
+        room.matchHistory.push(roundScores);
+      }
     }
     broadcastRoom(room);
   }, 100);
@@ -574,12 +609,25 @@ io.on('connection', (socket) => {
       room.socketsByPlayer[playerId] = player.socketId;
       room.players[player.socketId] = { playerId: parseInt(playerId) };
     });
+    // Preserve player names on the room for UI (playerId -> name)
+    room.playerNames = {};
+    Object.entries(lobby.players).forEach(([playerId, player]) => {
+      room.playerNames[playerId] = player.playerName;
+    });
+    room.matchHistory = room.matchHistory || [];
     
     rooms.deleteLobby(lobbyCode);
     io.to(`lobby:${lobbyCode}`).emit('lobby_started', { lobbyCode });
     // Broadcast initial game state
     broadcastRoom(room);
-  });});
+  });
+
+  socket.on('finish_lobby', ({ lobbyCode }) => {
+    console.log('[SERVER] finish_lobby:', socket.id, lobbyCode);
+    io.to(`lobby:${lobbyCode}`).emit('lobby_finished', { lobbyCode });
+  });
+
+});
 
 const PORT = process.env.PORT || 5050;
 httpServer.listen(PORT, () => {

@@ -76,6 +76,7 @@ export class RoomManager {
       matchSettings: null,
       currentRound: 1,
       totalScores: { 1: 0, 2: 0 },
+      matchHistory: [], // array of per-round score objects {1: n, 2: n}
       players: {}, // socketId -> { playerId }
       socketsByPlayer: { 1: null, 2: null },
       round: null, // round state object

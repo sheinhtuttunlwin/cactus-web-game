@@ -20,6 +20,8 @@ function Lobby() {
   const [totalScores, setTotalScores] = useState({ 1: 0, 2: 0 });
   const [matchOver, setMatchOver] = useState(false);
   const [matchRounds, setMatchRounds] = useState(1);
+  const [matchHistory, setMatchHistory] = useState([]);
+  const [playerNames, setPlayerNames] = useState({ 1: 'Player 1', 2: 'Player 2' });
 
   useEffect(() => {
     net.connect();
@@ -50,6 +52,10 @@ function Lobby() {
       setGameStarted(true);
     };
 
+    const handleLobbyFinished = () => {
+      setMatchOver(true);
+    };
+
     const handleConnect = () => setSocketConnected(true);
     const handleDisconnect = () => setSocketConnected(false);
 
@@ -57,6 +63,19 @@ function Lobby() {
     net.on("lobby_joined", handleJoined);
     net.on("lobby_update", handleLobbyUpdate);
     net.on("lobby_started", handleLobbyStarted);
+    // Listen for authoritative round updates from server so totals stay in sync
+    const handleRoundUpdate = ({ match }) => {
+      // eslint-disable-next-line no-console
+      console.log('[NET] lobby round_update match', match);
+      if (!match) return;
+      if (match.totalScores) setTotalScores(match.totalScores);
+      if (match.currentRound) setCurrentRound(match.currentRound);
+      if (match.settings && match.settings.numberOfRounds) setMatchRounds(match.settings.numberOfRounds);
+      if (match.history) setMatchHistory(match.history);
+      if (match.playerNames) setPlayerNames(match.playerNames);
+    };
+    net.on('round_update', handleRoundUpdate);
+    net.on("lobby_finished", handleLobbyFinished);
     net.on("connect", handleConnect);
     net.on("disconnect", handleDisconnect);
 
@@ -65,6 +84,8 @@ function Lobby() {
       net.off("lobby_joined", handleJoined);
       net.off("lobby_update", handleLobbyUpdate);
       net.off("lobby_started", handleLobbyStarted);
+      net.off("lobby_finished", handleLobbyFinished);
+      net.off('round_update', handleRoundUpdate);
       net.off("connect", handleConnect);
       net.off("disconnect", handleDisconnect);
     };
@@ -88,17 +109,28 @@ function Lobby() {
   };
 
   const handleRoundComplete = (roundScores) => {
+    // In online mode, the server is authoritative for round totals. Host triggers
+    // server-side advance; clients will receive updated totals via 'round_update'.
+    if (createdCode) {
+      if (currentRound >= matchRounds) {
+        setMatchOver(true);
+        if (isHost) net._emit('finish_lobby', { lobbyCode: createdCode });
+      } else {
+        if (isHost) net._emit('reset_round', { roomId: createdCode });
+      }
+      return;
+    }
+
+    // Offline/local mode: apply scores locally
     setTotalScores((prev) => ({
       1: (prev[1] || 0) + (roundScores[1] || 0),
       2: (prev[2] || 0) + (roundScores[2] || 0),
     }));
+    setMatchHistory((prev) => [...prev, roundScores]);
     if (currentRound >= matchRounds) {
       setMatchOver(true);
     } else {
       setCurrentRound((prev) => prev + 1);
-      if (createdCode) {
-        net._emit('reset_round', { roomId: createdCode });
-      }
     }
   };
 
@@ -131,6 +163,8 @@ function Lobby() {
         totalRounds={matchRounds}
         totalScores={totalScores}
         onRoundComplete={handleRoundComplete}
+        playerNames={playerNames}
+        matchHistory={matchHistory}
       />
     );
   }

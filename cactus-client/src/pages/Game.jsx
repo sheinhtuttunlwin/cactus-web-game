@@ -2,6 +2,7 @@ import * as actions from "../game/actions";
 import { SELF_PEEK, OPPONENT_PEEK, SWAP_ANY } from "../game/powers";
 import { useState, useEffect } from "react";
 import { PowerTimeIndicator, PowerButton, RevealProgressBar } from "../components/power/PowerUI";
+import Scoreboard from "../components/Scoreboard";
 import { calculateHandScore } from "../game/scoring";
 import net from "../network";
 import * as powerEffects from "../game/powerEffects";
@@ -16,7 +17,11 @@ function Game ({
   isOnlineFromLobby = false,
   lobbyCode = null,
   playerNameForLobby = null,
+  playerNames = {1: 'Player 1', 2: 'Player 2'},
+  matchHistory = [],
 }) {
+
+    const [showScoreboard, setShowScoreboard] = useState(false);
 
     const [deck, setDeck] = useState([]);
     const [discardPile, setDiscardPile] = useState([]);
@@ -30,6 +35,7 @@ function Game ({
     const [finalStackExpiresAt, setFinalStackExpiresAt] = useState(null);
     const [finalStackExpired, setFinalStackExpired] = useState(false);
     const [roundReported, setRoundReported] = useState(false);
+    const [pendingRoundScores, setPendingRoundScores] = useState(null);
     const [players, setPlayers] = useState({
       1: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
       2: { hand: [], pendingCard: null, swappingWithDiscard: false, activePower: null, activePowerToken: null, activePowerExpiresAt: null, activePowerLabel: null, revealedCardId: null, cardRevealExpiresAt: null },
@@ -89,23 +95,24 @@ function Game ({
       };
     }, [finalStackExpiresAt]);
 
-    // Report round scores up once, after final stack window closes
-    useEffect(() => {
-      if (!finalStackExpired || roundReported) return;
+    const computeRoundScores = () => {
       const p1 = calculateHandScore(players[1].hand);
       const p2 = calculateHandScore(players[2].hand);
       const scores = { 1: p1, 2: p2 };
-      // Strict winner gets 0; on tie, no zeroing applied
       if (p1 < p2) {
         scores[1] = 0;
       } else if (p2 < p1) {
         scores[2] = 0;
       }
-      if (typeof onRoundComplete === "function") {
-        onRoundComplete(scores);
-      }
-      setRoundReported(true);
-    }, [finalStackExpired, roundReported, players, onRoundComplete]);
+      return scores;
+    };
+
+    // Prepare round scores once cards are fully revealed, but don't auto-advance
+    useEffect(() => {
+      if (!finalStackExpired) return;
+      if (pendingRoundScores) return;
+      setPendingRoundScores(computeRoundScores());
+    }, [finalStackExpired, pendingRoundScores, players]);
 
     // Offline-only: deal locally. Online mode relies on server state.
     useEffect(() => {
@@ -175,6 +182,8 @@ function Game ({
         setRoundOver(round.roundOver || false);
         setFinalStackExpiresAt(round.finalStackExpiresAt || null);
         setFinalStackExpired(round.finalStackExpired || false);
+        
+        // (round advancement and totals are handled server-side and by Lobby)
       };
       
       net.on('room_update', handleRoomUpdate);
@@ -319,27 +328,29 @@ function Game ({
     };
 
 
+    const isHostPlayer = !isOnlineFromLobby || myPlayerId === 1;
+
     const handleResetDeck = () => {
-      // If this is part of a match AND round is complete (scores visible), advance to next round
-      if (onRoundComplete && finalStackExpired) {
-        const roundScores = {
-          1: player1Score,
-          2: player2Score,
-        };
-        onRoundComplete(roundScores);
-        // Don't reset here - Match component will handle round progression
-        return;
+      if (finalStackExpired && onRoundComplete) {
+        if (!isHostPlayer) return;
+        if (roundReported) return;
+        const scoresToSend = pendingRoundScores || computeRoundScores();
+        setRoundReported(true);
+        onRoundComplete(scoresToSend);
+        return; // Parent handles advancing/resetting
       }
       
       if (isOnline) {
+        if (!isHostPlayer) return;
         net.resetRound({ roomId });
       } else {
-        // Reset the current round (standalone or mid-round reset)
         actions.handleResetDeck({ setDeck, setPlayers, setDiscardPile, setCurrentPlayer, setHasStackedThisRound });
         setCactusCalledBy(null);
         setRoundOver(false);
         setFinalStackExpiresAt(null);
         setFinalStackExpired(false);
+        setRoundReported(false);
+        setPendingRoundScores(null);
       }
     };
 
@@ -381,6 +392,14 @@ function Game ({
 
     return (
         <div style={styles.page}>
+            <Scoreboard
+              open={showScoreboard}
+              onClose={() => setShowScoreboard(false)}
+              playerNames={playerNames}
+              matchHistory={matchHistory}
+              totalRounds={totalRounds}
+              totalScores={totalScores}
+            />
             {onExitToSetup ? (
               <button
                 style={styles.topLeftButton}
@@ -397,14 +416,11 @@ function Game ({
             <header style={styles.header}>
                 <h1 style={styles.title}>Card Test</h1>
                 <p style={styles.subtitle}>2-Player Turn-Based Game</p>
-                {totalRounds > 1 ? (
-                  <p style={styles.matchInfo}>
-                    Round {currentRound} of {totalRounds} | 
-                    {Object.keys(totalScores).length > 0 && (
-                      <span> Total: P1: {totalScores[1] || 0} pts | P2: {totalScores[2] || 0} pts</span>
-                    )}
-                  </p>
-                ) : null}
+                
+                <div style={{ marginTop: 6 }}>
+                  <button style={styles.buttonSecondary} onClick={() => setShowScoreboard(true)}>Scoreboard</button>
+                  
+                </div>
                 {roundOver ? (
                   <p style={styles.roundOverIndicator}>🌵 Round Over! Player {cactusCalledBy} called Cactus</p>
                 ) : cactusCalledBy ? (
@@ -420,11 +436,21 @@ function Game ({
                   />
                 ) : null}
                 {finalStackExpired ? (
-                  <div style={styles.scoreRow}>
-                    <div style={winningPlayer === 1 ? styles.scoreCardWinner : styles.scoreCard}>Player 1 Score: {player1Score}</div>
-                    <div style={winningPlayer === 2 ? styles.scoreCardWinner : styles.scoreCard}>Player 2 Score: {player2Score}</div>
-                  </div>
+                  <>
+                    {onRoundComplete && isHostPlayer ? (
+                      <div style={styles.scoreRow}>
+                        <button
+                          style={actionButtonStyle(styles.buttonSecondary, roundReported)}
+                          onClick={handleResetDeck}
+                          disabled={roundReported}
+                        >
+                          {currentRound >= totalRounds ? "Finish Match" : "Next Round"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
+                
             </header>
 
             <div style={styles.centerArea}>
@@ -497,11 +523,16 @@ function Game ({
 
                     
 
-                    <button style={styles.buttonSecondary} onClick={handleResetDeck}>
-                      {finalStackExpired && onRoundComplete 
-                        ? (currentRound >= totalRounds ? "Finish Match" : "Next Round")
-                        : "Reset"}
-                    </button>
+                    {(!isOnline || isHostPlayer) ? (
+                      // Show a plain Reset button here during normal play. When the round is over
+                      // and the header Next/Finish button is available (onRoundComplete), hide
+                      // this control to avoid duplicate Finish/Next buttons.
+                      !(finalStackExpired && onRoundComplete) ? (
+                        <button style={styles.buttonSecondary} onClick={handleResetDeck}>
+                          Reset
+                        </button>
+                      ) : null
+                    ) : null}
 
                     {players[currentPlayer].pendingCard && (!isOnline || myPlayerId === currentPlayer) ? (
                       <button style={styles.button} onClick={handleDiscardPending} title="Discard drawn card">
@@ -557,7 +588,10 @@ function Game ({
             <div style={styles.playersSection}>
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
-                  <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
+                      <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
+                      {finalStackExpired ? (
+                        <span style={styles.handTotalBadge}>Total: {player1Score}</span>
+                      ) : null}
                   {players[1].activePower && players[1].activePowerExpiresAt && !finalStackExpired ? (
                     <PowerTimeIndicator
                       expiresAt={players[1].activePowerExpiresAt}
@@ -757,6 +791,9 @@ function Game ({
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
                   <span>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
+                  {finalStackExpired ? (
+                    <span style={styles.handTotalBadge}>Total: {player2Score}</span>
+                  ) : null}
                   {players[2].activePower && players[2].activePowerExpiresAt && !finalStackExpired ? (
                     <PowerTimeIndicator
                       expiresAt={players[2].activePowerExpiresAt}
@@ -1087,6 +1124,13 @@ const styles = {
     fontSize: 15,
   },
 
+  waitingText: {
+    alignSelf: "center",
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 14,
+    marginLeft: 8,
+  },
+
   centerArea: {
     flex: 1,
     display: "grid",
@@ -1355,6 +1399,18 @@ const styles = {
     padding: "20px 0",
     borderTop: "1px solid rgba(255,255,255,0.1)",
   },
+  handTotalBadge: {
+    marginLeft: 8,
+    padding: "4px 8px",
+    borderRadius: 8,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    fontWeight: 800,
+    fontSize: 13,
+  },
+
+  // handTotalAbove removed — kept style object for potential reuse
+  
 };
 
 
