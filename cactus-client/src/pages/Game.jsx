@@ -414,19 +414,16 @@ function Game ({
             ) : null}
             <div style={styles.table}>
             <header style={styles.header}>
-                <h1 style={styles.title}>Card Test</h1>
-                <p style={styles.subtitle}>2-Player Turn-Based Game</p>
-                
                 <div style={{ marginTop: 6 }}>
                   <button style={styles.buttonSecondary} onClick={() => setShowScoreboard(true)}>Scoreboard</button>
                   
                 </div>
                 {roundOver ? (
-                  <p style={styles.roundOverIndicator}>🌵 Round Over! Player {cactusCalledBy} called Cactus</p>
+                  <p style={styles.roundOverIndicator}>🌵 Round Over! {playerNames[cactusCalledBy] || `Player ${cactusCalledBy}`} called Cactus</p>
                 ) : cactusCalledBy ? (
-                  <p style={styles.finalRoundIndicator}>Final Round! Player {currentPlayer}'s last turn</p>
+                  <p style={styles.finalRoundIndicator}>Final Round! {playerNames[currentPlayer] || `Player ${currentPlayer}`}'s last turn</p>
                 ) : (
-                  <p style={styles.turnIndicator}>Player {currentPlayer}'s Turn</p>
+                  <p style={styles.turnIndicator}>{playerNames[currentPlayer] || `Player ${currentPlayer}`}'s Turn</p>
                 )}
                 {finalStackExpiresAt && Date.now() < finalStackExpiresAt ? (
                   <PowerTimeIndicator
@@ -480,7 +477,7 @@ function Game ({
                 <div style={styles.cardFace}>
                   {players[currentPlayer].pendingCard ? (
                     isOnline && myPlayerId !== currentPlayer ? (
-                      <div style={styles.cardPlaceholder}>Player {currentPlayer}'s Turn</div>
+                      <div style={styles.cardPlaceholder}>{(playerNames[currentPlayer] || `Player ${currentPlayer}`) + "'s Turn"}</div>
                     ) : (
                       <div
                         style={{
@@ -494,7 +491,7 @@ function Game ({
                     )
                   ) : (
                   <div style={styles.cardPlaceholder}>
-                    {isOnline && myPlayerId !== currentPlayer ? `Player ${currentPlayer}'s Turn` : "Draw to reveal"}
+                    {isOnline && myPlayerId !== currentPlayer ? (playerNames[currentPlayer] || `Player ${currentPlayer}`) + "'s Turn" : "Draw to reveal"}
                   </div>
                   )}
                 </div>
@@ -588,7 +585,7 @@ function Game ({
             <div style={styles.playersSection}>
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
-                      <span>Player 1{currentPlayer === 1 ? " (Your Turn)" : ""}</span>
+                      <span>{playerNames[1] || 'Player 1'}{currentRound && currentPlayer === 1 ? (currentPlayer === 1 ? " (Your Turn)" : "") : (currentPlayer === 1 ? " (Your Turn)" : "")}</span>
                       {finalStackExpired ? (
                         <span style={styles.handTotalBadge}>Total: {player1Score}</span>
                       ) : null}
@@ -790,7 +787,7 @@ function Game ({
 
               <div style={styles.playerColumn}>
                 <div style={styles.playerLabel}>
-                  <span>Player 2{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
+                  <span>{playerNames[2] || 'Player 2'}{currentPlayer === 2 ? " (Your Turn)" : ""}</span>
                   {finalStackExpired ? (
                     <span style={styles.handTotalBadge}>Total: {player2Score}</span>
                   ) : null}
